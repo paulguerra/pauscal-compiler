@@ -1,0 +1,229 @@
+Importar "Globales.prp"
+Importar "Conversiones.prp"
+Importar "Tipos.prp"
+Importar "IO.prp"
+Importar "Utiles.prp"
+Importar "Excepciones.prp"
+Importar "EstrucControl.prp"
+Importar "Instrucciones.prp"
+
+$EBC- 'Desactivamos EBC para activar la evaluación booleana parcial
+
+
+Proc CompilarLinea(codigoLinea:Cadena, precompilar:Booleano):Booleano
+	Var lineaContinua,debeSalir:Booleano
+	Var indice,siguientePalabra:Entero
+	
+	Si SepararEnPalabras(codigoLinea, lineaContinua, indice) Entonces AgregarError(3, Falso)
+	Mientras Longitud(palabras[indice]) = 0 ' And indice <> 0
+		indice = indice - 1
+	FinMientras
+	Si palabras[indice] = "_" Entonces Devolver Verd
+	Si (Longitud(palabras[0]) > 0) And (palabras[0] <> "$") Entonces
+		Si precompilar And EsIgual(palabras[0], ictDecFileInvalidInst) Entonces Salir
+		Si idProcActual <> -1 Entonces
+			Si EsIgual(palabras[0], ictInProcInvalidDecl) Entonces
+				GenerarCodigoDeInicio()
+			FinSi
+		SiNo
+			Si idClaseActual <> -1 Entonces
+				Si EsIgual(palabras[0], > (idPropActual <> -1) ? ictInPropInvalidDecl : ictInClassInvalidDecl) Entonces AgregarError(5, Falso)
+			FinSi
+		FinSi
+		Si EsIgual(palabras[0], ictFreeCodeInvalidDecl) Entonces
+			Si incluirDebug Entonces
+				Eval infoLineas[linea]
+					.IdProc = idProcActual
+					.IdClase = idClaseActual
+					.EstrucControl = GenerarEstrucControl()
+					.HayCodigo = Verd
+				FinEval
+			FinSi
+			Si (Neg comienzoDelMain) And (idProcActual = -1) And (idClaseActual = -1) Entonces
+				Si esDll Or esBibPrecomp Entonces AgregarError(71, Falso)
+				AgregarCodigoMain()
+				Si incluirDebug Entonces
+					Escribir("mov ecx, offset _debug_globalinfo")
+					Escribir("mov eax, offset pscDebugSetStr")
+					Escribir("mov edx, offset pscAppCodeStart")
+					Escribir("int 3")
+				FinSi
+				AgregarLlamadasIniciales()
+				comienzoDelMain = Verd
+			FinSi
+		FinSi
+	FinSi
+	Seleccionar CadMinus(palabras[0])
+		Caso ""
+		Caso "$"
+			InstrucciónPreprocesador(siguientePalabra, debeSalir)
+		Caso "privado", "público"
+			InstrucciónModificadorAlcance(siguientePalabra)
+		Caso "importar"
+			InstrucciónImportar(siguientePalabra, precompilar)
+		Caso "const"
+			InstrucciónConst(siguientePalabra, precompilar, debeSalir)
+		Caso "var"
+			InstrucciónVar(siguientePalabra, precompilar, debeSalir)
+		Caso "clasevar"
+			InstrucciónClaseVar(siguientePalabra, precompilar, debeSalir)
+	FinSeleccionar
+	Si debeSalir Entonces Salir
+FinProc
+
+' Genera el código de inicio de una función o método
+Proc GenerarCodigoDeInicio()
+	Var bytes,words:Entero
+	
+	Si codigoDeInicioGenerado Entonces Salir
+	Si tipoRetorno Es Nulo Entonces
+		bytes = 0
+	SiNo
+		words = Bytes2Words(MedirEnBytes(tipoRetorno.Tipo, , tipoRetorno.Tamaño))
+		EscribirU("LOCAL __$tempResult[{0}]:dword", words)
+		bytes = words * 4
+	FinSi
+	bytes = bytes + DescargarLocales()
+	Si bytes > 0 Entonces
+		Escribir("mov eax,esp")
+		EscribirU("mov ecx,{0}", bytes \ 4)
+		Escribir("call pscInitStack")
+	FinSi
+	Escribir("push ebx")
+	Escribir("push edi")
+	Escribir("push esi")
+	Si idClaseActual <> 0 Entonces Escribir("mov esi,[objptr]")
+	ProtegerStackFrame(incluirDebug)
+	Si incluirDebug Entonces
+		Escribir("xor ecx,ecx")
+		Escribir("mov eax,ecx")
+		Escribir("dec ecx")
+		Si idClaseActual <> -1 Entonces
+			EscribirU("mov edx,{0}", idClaseActual+1) 'TODO: comprobar desfasaje
+			EscribirU("mov ebx,{0}", idProcActual+1) 'TODO: comprobar desfasaje
+		SiNo
+			Escribir("mov edx,ecx")
+			EscribirU("mov ebx,{0}", idProcActual+1) 'TODO: comprobar desfasaje
+		FinSi
+		Escribir("int 3")
+	FinSi
+	codigoDeInicioGenerado = Verd
+FinProc
+
+
+Proc AgregarCodigoMain()
+	Escribir("start:")
+	Escribir("mov ebx,offset pscBeginCode")
+	Si incluirDebug Entonces Escribir("mov ebp,esp")
+	Escribir("call pscBeginExec")
+	Si esDll Entonces Escribir("retn 12")
+	Escribir("pscBeginCode:")
+FinProc
+
+
+Proc AgregarLlamadasIniciales()
+	Var i:EnteroSig
+	
+	Contar i = 0 a LongMat(procs)-1
+		Eval procs[i]
+			Si (.Flags And finfInicial) > 0 Entonces EscribirU("call __proc_{0}", .Id)
+		FinEval
+	Seguir
+FinProc
+
+
+Proc CargarOpcionesPorDefecto()
+	optBoolCompleto = Verd
+	optAdvertencias = Verd
+	optCadenasExternas = Verd
+FinProc
+
+Var ultimoProgreso:Entero
+Proc MarcarProgreso(linea:Entero, total:Entero)
+	Var progreso:Entero
+	
+	Si total <> 0 Entonces progreso = (linea * 100) \ total
+	Si ultimoProgreso = progreso Entonces Salir
+	PostearNotificación(progreso)
+	ultimoProgreso = progreso
+FinProc
+
+
+Const cExtensión = 10
+Proc SepararEnPalabras(Referencia linea:Cadena, Referencia lineaContinua:Booleano, Referencia maximo:Entero):Booleano
+	Var i:Entero
+	Var car:Cadena
+	
+	maximo = 0
+	Redim palabras, cExtensión
+	Contar i = 1 a Longitud(linea)
+		car = ParteCad(linea, i, 1)
+		Si car = #8 Entonces car = " " 'los tabs son espacios
+		Si (BuscarEnCad(cSeparadores, car) <> 0) And (Neg Resultado) Entonces
+			Si Longitud(palabras[maximo]) <> 0 Entonces
+				maximo = maximo + 1
+				Redim Preservar palabras, maximo+cExtensión
+			FinSi
+			palabras[maximo] = palabras[maximo] + car
+			maximo = maximo + 1
+			Redim Preservar palabras, maximo+cExtensión
+		SiNo
+			Si Neg Resultado Entonces
+				Seleccionar car
+					Caso "'"
+						Salir Contar
+					Caso ";"
+						linea = ParteCad(linea, i+1)
+						lineaContinua = Verd
+						Salir Contar
+				FinSeleccionar
+			FinSi
+			Si car = #34 Entonces
+				Si Resultado And (i <> Longitud(linea)) Entonces
+					Si ParteCad(linea,i+1,1) = #34 Entonces
+						i=i+1
+						palabras[maximo] = palabras[maximo] + #34
+						Resultado = Neg Resultado
+					FinSi
+				FinSi
+				Resultado = Neg Resultado
+			FinSi
+			Si Resultado Or (car <> " ") Entonces
+				palabras[maximo] = palabras[maximo] + car
+			SiNo; Si Longitud(palabras[maximo]) <> 0 Entonces
+				maximo = maximo + 1
+				Redim Preservar palabras, maximo+cExtensión
+			FinSi; FinSi
+		FinSi
+	Seguir
+	Si Neg lineaContinua Entonces linea = ""
+FinProc
+
+
+Proc VerificarTodoCerrado()
+	Si LongMat(estrucControls) = 0 Entonces Salir
+	Eval estrucControls[LongMat(estrucControls)-1]
+		Si Longitud(.Tipo) <> 0 Entonces
+			linea = .Línea
+			Seleccionar CadMinus(.Tipo)
+				Caso eSi
+					AgregarError(15, Falso)
+				Caso eContar
+					AgregarError(19, Falso)
+				Caso eMientras
+					AgregarError(22, Falso)
+				Caso eEval
+					AgregarError(25, Falso)
+				Caso eRepetir
+					AgregarError(29, Falso)
+				Caso eSeleccionar
+					AgregarError(33, Falso)
+				Caso eAdmErr
+					AgregarError(65, Falso)
+				Caso eBloque
+					AgregarError(81, Falso)
+			FinSeleccionar
+		FinSi
+	FinEval
+FinProc
+

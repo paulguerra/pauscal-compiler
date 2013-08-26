@@ -1,0 +1,279 @@
+Importar "Globales.prp"
+Importar "Validadores.prp"
+Importar "Errores.prp"
+Importar "Variante.prp"
+Importar "Conversiones.prp"
+
+$EBC- 'Desactivamos EBC para activar la evaluación booleana parcial
+
+
+Proc EvalConstNumérico(Referencia nroPalabra:Entero):Real
+	Var ret,tipo:Cadena
+	
+	ret = EvalConst(nroPalabra, tipo)
+	Si (tipo = pCadena) Or (tipo = pBooleano) Entonces AgregarError(4, Falso)
+	Resultado = CadReal(ret)
+FinProc
+
+
+Proc EvalConst(Referencia nroPalabra:Entero, Referencia tipo:Cadena):Cadena
+	Var ret:cVariante
+	
+	ret = EvalExpresión(nroPalabra, Falso)
+	Si ret.Tipo = cVarianteNulo Entonces AgregarError(34, Falso)
+	Seleccionar ret.Tipo
+		Caso cVarianteBooleano
+			tipo = pBooleano
+			Resultado = > ret.Bool ? 1 : 0
+		Caso cVarianteCadena
+			tipo = pCadena
+			Resultado = ret.Cad
+		Caso cVarianteReal
+			tipo = pReal
+			Resultado = RealCad(ret.Dbl)
+		Caso cVarianteEntero
+			tipo = pEntero
+			Resultado = EntCad(ret.Ent)
+		Caso cVarianteDecimal
+			tipo = pReal
+			Resultado = DecCad(ret.Cy)
+	FinSeleccionar
+FinProc
+
+
+Proc EvalExpresión(Referencia nroPalabra:Entero, noLanzarError:Booleano):cVariante
+	Var negativo:Booleano
+	Var ex:Entero
+	Var numError:EnteroSig
+	
+	AdmErr
+		Seleccionar palabras[nroPalabra]
+			Caso "-"
+				negativo = Verd
+				nroPalabra = nroPalabra + 1
+			Caso "+"
+				nroPalabra = nroPalabra + 1
+		FinSeleccionar
+		Resultado = EvalAnd(nroPalabra, noLanzarError)
+		Si negativo Entonces Resultado = NegarVariante(Resultado)
+		Repetir
+			Si Resultado.Tipo = cVarianteNulo Entonces Salir
+			Seleccionar palabras[nroPalabra]
+				Caso "+"
+					nroPalabra = nroPalabra + 1
+					Resultado = AplicarMatematicaVariante(Resultado, EvalAnd(nroPalabra, noLanzarError), matematicaSuma)
+				Caso "-"
+					nroPalabra = nroPalabra + 1
+					Resultado = AplicarMatematicaVariante(Resultado, EvalAnd(nroPalabra, noLanzarError), matematicaResta)
+				Caso Otro
+					Salir Repetir
+			FinSeleccionar
+		PorSiempre
+	Controlar ex
+		numError = ex 'Para evitar la advertencia
+		Si noLanzarError And (numError <> errEntDivCero) And (numError <> errFloatDivCero) Entonces
+			Resultado = VarianteNulo
+			Salir
+		FinSi
+		AgregarError(34, Falso)
+	FinAdmErr
+FinProc
+
+
+Proc EvalAnd(Referencia nroPalabra:Entero, noLanzarError:Booleano):cVariante
+	Resultado = EvalOr(nroPalabra, noLanzarError)
+	Repetir
+		Si Resultado.Tipo = cVarianteNulo Entonces Salir
+		Seleccionar CadMinus(palabras[nroPalabra])
+			Caso "and", "y"
+				nroPalabra = nroPalabra + 1
+				Resultado = AplicarLogicaVariante(Resultado, EvalOr(nroPalabra, noLanzarError), logicaAnd)
+			Caso Otro
+				Salir Repetir
+		FinSeleccionar
+	PorSiempre
+FinProc
+
+
+Proc EvalOr(Referencia nroPalabra:Entero, noLanzarError:Booleano):cVariante
+	Resultado = EvalTerm(nroPalabra, noLanzarError)
+	Repetir
+		Si Resultado.Tipo = cVarianteNulo Entonces Salir
+		Seleccionar CadMinus(palabras[nroPalabra])
+			Caso "or", "o"
+				nroPalabra = nroPalabra + 1
+				Resultado = AplicarLogicaVariante(Resultado, EvalTerm(nroPalabra, noLanzarError), logicaOr)
+			Caso "xor"
+				nroPalabra = nroPalabra + 1
+				Resultado = AplicarLogicaVariante(Resultado, EvalTerm(nroPalabra, noLanzarError), logicaXor)
+			Caso Otro
+				Salir Repetir
+		FinSeleccionar
+	PorSiempre
+FinProc
+
+
+Proc EvalTerm(Referencia nroPalabra:Entero, noLanzarError:Booleano):cVariante
+	Var temp:cVariante
+
+	Resultado = EvalFactor(nroPalabra, noLanzarError)
+	Repetir
+		Si Resultado.Tipo = cVarianteNulo Entonces Salir
+		Seleccionar CadMinus(palabras[nroPalabra])
+			Caso "*"
+				nroPalabra = nroPalabra + 1
+				Resultado = AplicarMatematicaVariante(Resultado, EvalFactor(nroPalabra, noLanzarError), matematicaMultiplicacion)
+			Caso "/"
+				nroPalabra = nroPalabra + 1
+				Resultado = AplicarMatematicaVariante(Resultado, EvalFactor(nroPalabra, noLanzarError), matematicaDivision)
+			Caso "\"
+				nroPalabra = nroPalabra + 1
+				Resultado = AplicarMatematicaVariante(Resultado, EvalFactor(nroPalabra, noLanzarError), matematicaDivisionEntera)
+			Caso "shl"
+				nroPalabra = nroPalabra + 1
+				temp = AplicarMatematicaVariante(EnteroVariante(2), EvalFactor(nroPalabra, noLanzarError), matematicaPotencia)
+				Resultado = AplicarMatematicaVariante(Resultado, temp, matematicaMultiplicacion)
+			Caso "shr"
+				nroPalabra = nroPalabra + 1
+				temp = AplicarMatematicaVariante(EnteroVariante(2), EvalFactor(nroPalabra, noLanzarError), matematicaPotencia)
+				Resultado = AplicarMatematicaVariante(Resultado, temp, matematicaDivisionEntera)
+			Caso "mod"
+				nroPalabra = nroPalabra + 1
+				Resultado = AplicarMatematicaVariante(Resultado, EvalFactor(nroPalabra, noLanzarError), matematicaModulo)
+				
+			Caso "^"
+				nroPalabra = nroPalabra + 1
+				Resultado = AplicarMatematicaVariante(Resultado, EvalFactor(nroPalabra, noLanzarError), matematicaPotencia)
+			Caso Otro
+				Salir Repetir
+		FinSeleccionar
+	PorSiempre
+FinProc
+
+
+Proc EvalFactor(Referencia nroPalabra:Entero, noLanzarError:Booleano):cVariante
+	Var temp:Cadena
+	Var indice:EnteroSig
+	
+	Seleccionar CadMinus(palabras[nroPalabra])
+		Caso "("
+			nroPalabra = nroPalabra + 1
+			Resultado = EvalExpresión(nroPalabra, noLanzarError)
+			Si Resultado.Tipo = cVarianteNulo Entonces Salir
+			Si palabras[nroPalabra] <> ")" Entonces
+				Si Neg noLanzarError Entonces AgregarError(1, Falso, "Cierre de paréntesis")
+				Resultado = VarianteNulo
+				Salir
+			FinSi
+		Caso "pi"
+			Resultado = RealVariante(Pi)
+		Caso "neg"
+			nroPalabra = nroPalabra + 1
+			Resultado = NegarVariante(EvalFactor(nroPalabra, noLanzarError))
+		Caso "verd"
+			Resultado = BooleanoVariante(Verd)
+		Caso "falso"
+			Resultado = BooleanoVariante(Falso)
+		Caso "&"
+			Resultado = EnteroVariante(HexEnt(palabras[nroPalabra + 1]))
+			nroPalabra = nroPalabra + 1
+		Caso Otro
+			Si EsNumérico(palabras[nroPalabra]) Entonces
+				temp = palabras[nroPalabra]
+				Si palabras[nroPalabra+1] = "." Entonces
+					nroPalabra = nroPalabra + 2
+					Si Neg EsNumérico(palabras[nroPalabra]) Entonces AgregarError(0, Falso)
+					Si palabras[nroPalabra+1] = "@" Entonces
+						Resultado = DecimalVariante(CadDec(temp + SeparadorDecimal() + palabras[nroPalabra]))
+						nroPalabra = nroPalabra + 1
+					SiNo
+						Resultado = RealVariante(CadReal(temp + SeparadorDecimal() + palabras[nroPalabra]))
+					FinSi
+				SiNo
+					Si palabras[nroPalabra+1] = "@" Entonces
+						Resultado = DecimalVariante(CadDec(temp))
+					SiNo
+						Si EsReal(CadReal(temp)) Entonces
+							Resultado = RealVariante(CadReal(temp))
+						SiNo
+							Resultado = EnteroVariante(CadEnt(temp))
+						FinSi
+					FinSi
+				FinSi
+			SiNo
+				Si (IzquierdaCad(palabras[nroPalabra],1) = #34) O (IzquierdaCad(palabras[nroPalabra],1) = "#") Entonces
+					Resultado = CadenaVariante(ObtenerCadena(nroPalabra))
+					Salir
+				SiNo
+					indice = EsConst(palabras[nroPalabra])
+					Si indice = -1 Entonces
+						Si Neg noLanzarError Entonces AgregarError(40, Falso)
+						Resultado = VarianteNulo
+						Salir
+					FinSi
+					Resultado = EvaluarConst(consts[indice].Rep)
+				FinSi
+			FinSi
+	FinSeleccionar
+	nroPalabra = nroPalabra + 1
+FinProc
+
+
+Proc ObtenerCadena(Referencia nroPalabra:Entero):Cadena
+	Var str,chr:Cadena
+	Var i,pos,pos2:Entero
+	Var enCadena:Booleano
+	
+	str = palabras[nroPalabra]
+	Contar i = 1 a Longitud(str)
+		chr = ParteCad(str, i, 1)
+		Seleccionar chr
+			Caso #34
+				enCadena = Neg enCadena
+			Caso "#"
+				Si enCadena Entonces
+					Resultado = Resultado + chr
+				SiNo
+					pos = BuscarEnCad(str, "#", i+1)
+					pos2 = BuscarEnCad(str, #34, i+1)
+					Si (pos=0) O ((pos2<pos) Y (pos2<>0)) Entonces pos=pos2
+					Si pos = 0 Entonces pos = Longitud(str)+1
+					chr = ParteCad(str, i+1, pos-1-i)
+					i = pos - 1
+					Si Neg EsNumérico(chr) Entonces AgregarError(0, Falso)
+					pos = CadEnt(chr)
+					Si (pos<0) O (pos>255) Entonces AgregarError(54, Falso, EntCad(pos), "Carácter")
+					Resultado = Resultado + Carac(pos)
+				FinSi
+		FinSeleccionar
+	Seguir
+	nroPalabra = nroPalabra + 1
+FinProc
+
+
+Proc EsConst(nombre:Cadena):EnteroSig
+	Var i:EnteroSig
+	Var nn:Cadena
+	
+	Contar i = 0 a LongMat(consts)-1
+		nn = consts[i].Nombre
+		Si Longitud(nn) > 0 Entonces
+			Si nn = nombre Entonces Devolver i
+		FinSi
+	Seguir
+	Devolver -1
+FinProc
+
+
+Proc EvaluarConst(Referencia rep[]:Cadena):cVariante
+	Var palabrasBak[]:Cadena
+	Var nroPalabraFalso:Entero
+	
+	palabrasBak = palabras
+	palabras = rep
+	nroPalabraFalso = 0
+	Resultado = EvalExpresión(nroPalabraFalso, Verd)
+	Si Resultado.Tipo = cVarianteNulo Entonces AgregarError(40, Falso)
+	palabras = palabrasBak
+FinProc
+

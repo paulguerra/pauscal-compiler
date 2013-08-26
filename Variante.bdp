@@ -1,0 +1,330 @@
+Importar "Declare.prp"
+Importar "Cadena.prp"
+Importar "Conversiones.prp"
+
+$EBC- 'Desactivamos EBC para activar la evaluación booleana parcial
+
+
+' TIPO DE DATO VARIANTE
+
+Estruc cVariante, _
+	Cad:Cadena, _
+	Bool:Booleano, _
+	Dbl:Real, _
+	Ent:EnteroSig, _
+	Cy:Decimal, _
+	Tipo:Entero
+	
+Var VarianteNulo:cVariante
+
+Const cVarianteNulo = 0, cVarianteCadena = 1, cVarianteBooleano = 2, cVarianteReal = 3, cVarianteEntero = 4, cVarianteDecimal = 5
+
+Proc NegarVariante(a:cVariante):cVariante
+	Seleccionar a.Tipo
+		Caso cVarianteNulo
+			Resultado = VarianteNulo
+		Caso cVarianteCadena
+			GenerarError errTipoIncompatible
+		Caso cVarianteBooleano
+			Resultado.Tipo = cVarianteBooleano
+			Resultado.Bool = Neg a.Bool
+		Caso cVarianteReal
+			Resultado.Tipo = cVarianteReal
+			Resultado.Dbl = -a.Dbl
+		Caso cVarianteEntero
+			Resultado.Tipo = cVarianteEntero
+			Resultado.Ent = -a.Ent
+
+		Caso Otro
+			GenerarError errTipoIncompatible
+	FinSeleccionar
+FinProc
+
+
+Const logicaOr = 1, logicaAnd = 2, logicaXor = 3
+Proc AplicarLogicaVariante(a,b:cVariante, op:Entero):cVariante
+	Si (a.Tipo = cVarianteNulo) Or (b.Tipo = cVarianteNulo) Entonces
+		Resultado = VarianteNulo
+		Salir
+	FinSi
+	Seleccionar a.Tipo + (10 * b.Tipo)
+		Caso cVarianteBooleano + (10 * cVarianteBooleano)
+			Resultado.Tipo = cVarianteBooleano
+			Seleccionar op
+				Caso logicaOr
+					Resultado.Bool = a.Bool Or b.Bool
+				Caso logicaAnd
+					Resultado.Bool = a.Bool And b.Bool
+				Caso logicaXor
+					Resultado.Bool = a.Bool Xor b.Bool
+				Caso Otro
+					GenerarError errTipoIncompatible
+			FinSeleccionar
+
+		Caso Otro
+			GenerarError errTipoIncompatible
+	FinSeleccionar
+FinProc
+
+
+Const matematicaSuma = 0, matematicaResta = 1, matematicaMultiplicacion = 2, matematicaDivision = 3, matematicaDivisionEntera = 4, matematicaPotencia = 5, matematicaModulo = 6
+Proc AplicarMatematicaVariante(a,b:cVariante, op:Entero):cVariante
+	Si (a.Tipo = cVarianteNulo) Or (b.Tipo = cVarianteNulo) Entonces
+		Resultado = VarianteNulo
+		Salir
+	FinSi
+	Seleccionar a.Tipo + (10 * b.Tipo)
+		Caso cVarianteCadena + (10 * cVarianteCadena)
+			Seleccionar op
+				Caso matematicaSuma
+					Resultado.Tipo = cVarianteCadena
+					Resultado.Cad = a.Cad + b.Cad
+			FinSeleccionar
+		Caso cVarianteCadena + (10 * cVarianteReal)
+			Seleccionar op
+				Caso matematicaSuma
+					Resultado.Tipo = cVarianteCadena
+					Resultado.Cad = a.Cad + RealCad(b.Dbl)
+			FinSeleccionar
+		Caso cVarianteCadena + (10 * cVarianteEntero)
+			Seleccionar op
+				Caso matematicaSuma
+					Resultado.Tipo = cVarianteCadena
+					Resultado.Cad = a.Cad + EntCad(b.Ent)
+			FinSeleccionar
+		Caso cVarianteCadena + (10 * cVarianteDecimal)
+			Seleccionar op
+				Caso matematicaSuma
+					Resultado.Tipo = cVarianteCadena
+					Resultado.Cad = a.Cad + DecCad(b.Cy)
+			FinSeleccionar
+			
+		Caso cVarianteReal + (10 * cVarianteCadena)
+			Seleccionar op
+				Caso matematicaSuma
+					Resultado.Tipo = cVarianteCadena
+					Resultado.Cad = RealCad(a.Dbl) + b.Cad
+			FinSeleccionar
+		Caso cVarianteReal + (10 * cVarianteReal)
+			Seleccionar op
+				Caso matematicaSuma
+					Resultado.Tipo = cVarianteReal
+					Resultado.Dbl = a.Dbl + b.Dbl
+				Caso matematicaResta
+					Resultado.Tipo = cVarianteReal
+					Resultado.Dbl = a.Dbl - b.Dbl
+				Caso matematicaMultiplicacion
+					Resultado.Tipo = cVarianteReal
+					Resultado.Dbl = a.Dbl * b.Dbl
+				Caso matematicaDivision
+					Resultado.Tipo = cVarianteReal
+					Resultado.Dbl = a.Dbl / b.Dbl
+				Caso matematicaDivisionEntera
+					Resultado.Tipo = cVarianteReal
+					Resultado.Dbl = a.Dbl \ b.Dbl
+				Caso matematicaPotencia
+					Resultado.Tipo = cVarianteReal
+					Resultado.Dbl = a.Dbl ^ b.Dbl
+			FinSeleccionar
+		Caso cVarianteReal + (10 * cVarianteEntero)
+			Seleccionar op
+				Caso matematicaSuma
+					Resultado.Tipo = cVarianteReal
+					Resultado.Dbl = a.Dbl + EntReal(b.Ent)
+				Caso matematicaResta
+					Resultado.Tipo = cVarianteReal
+					Resultado.Dbl = a.Dbl - EntReal(b.Ent)
+				Caso matematicaMultiplicacion
+					Resultado.Tipo = cVarianteReal
+					Resultado.Dbl = a.Dbl * EntReal(b.Ent)
+				Caso matematicaDivision
+					Resultado.Tipo = cVarianteReal
+					Resultado.Dbl = a.Dbl / EntReal(b.Ent)
+				Caso matematicaDivisionEntera
+					Resultado.Tipo = cVarianteReal
+					Resultado.Dbl = a.Dbl \ EntReal(b.Ent)
+				Caso matematicaPotencia
+					Resultado.Tipo = cVarianteReal
+					Resultado.Dbl = a.Dbl ^ EntReal(b.Ent)
+			FinSeleccionar
+		Caso cVarianteReal + (10 * cVarianteDecimal)
+			Seleccionar op
+				Caso matematicaSuma
+					Resultado.Tipo = cVarianteDecimal
+					Resultado.Cy = RealDec2(a.Dbl) + b.Cy
+				Caso matematicaResta
+					Resultado.Tipo = cVarianteDecimal
+					Resultado.Cy = RealDec2(a.Dbl) - b.Cy
+				Caso matematicaMultiplicacion
+					Resultado.Tipo = cVarianteDecimal
+					Resultado.Cy = RealDec2(a.Dbl) * b.Cy
+				Caso matematicaDivision
+					Resultado.Tipo = cVarianteDecimal
+					Resultado.Cy = RealDec2(a.Dbl) / b.Cy
+				Caso matematicaPotencia
+					Resultado.Tipo = cVarianteDecimal
+					Resultado.Cy = RealDec2(a.Dbl ^ DecReal(b.Cy))
+			FinSeleccionar
+			
+		Caso cVarianteEntero + (10 * cVarianteCadena)
+			Seleccionar op
+				Caso matematicaSuma
+					Resultado.Tipo = cVarianteCadena
+					Resultado.Cad = EntCad(a.Ent) + b.Cad
+			FinSeleccionar
+		Caso cVarianteEntero + (10 * cVarianteReal)
+			Seleccionar op
+				Caso matematicaSuma
+					Resultado.Tipo = cVarianteReal
+					Resultado.Dbl = EntReal(a.Ent) + b.Dbl
+				Caso matematicaResta
+					Resultado.Tipo = cVarianteReal
+					Resultado.Dbl = EntReal(a.Ent) - b.Dbl
+				Caso matematicaMultiplicacion
+					Resultado.Tipo = cVarianteReal
+					Resultado.Dbl = EntReal(a.Ent) * b.Dbl
+				Caso matematicaDivision
+					Resultado.Tipo = cVarianteReal
+					Resultado.Dbl = EntReal(a.Ent) / b.Dbl
+				Caso matematicaPotencia
+					Resultado.Tipo = cVarianteReal
+					Resultado.Dbl = EntReal(a.Ent) ^ b.Dbl
+			FinSeleccionar
+		Caso cVarianteEntero + (10 * cVarianteEntero)
+			Seleccionar op
+				Caso matematicaSuma
+					Resultado.Tipo = cVarianteEntero
+					Resultado.Ent = a.Ent + b.Ent
+				Caso matematicaResta
+					Resultado.Tipo = cVarianteEntero
+					Resultado.Ent = a.Ent - b.Ent
+				Caso matematicaMultiplicacion
+					Resultado.Tipo = cVarianteEntero
+					Resultado.Ent = a.Ent * b.Ent
+				Caso matematicaDivision
+					Resultado.Tipo = cVarianteEntero
+					Resultado.Ent = a.Ent \ b.Ent
+				Caso matematicaDivisionEntera
+					Resultado.Tipo = cVarianteEntero
+					Resultado.Ent = a.Ent \ b.Ent
+				Caso matematicaPotencia
+					Resultado.Tipo = cVarianteEntero
+					Resultado.Ent = a.Ent ^ b.Ent
+				Caso matematicaModulo
+					Resultado.Tipo = cVarianteEntero
+					Resultado.Ent = a.Ent Mod b.Ent
+			FinSeleccionar
+		Caso cVarianteEntero + (10 * cVarianteDecimal)
+			Seleccionar op
+				Caso matematicaSuma
+					Resultado.Tipo = cVarianteDecimal
+					Resultado.Cy = EntDec(a.Ent) + b.Cy
+				Caso matematicaResta
+					Resultado.Tipo = cVarianteDecimal
+					Resultado.Cy = EntDec(a.Ent) - b.Cy
+				Caso matematicaMultiplicacion
+					Resultado.Tipo = cVarianteDecimal
+					Resultado.Cy = EntDec(a.Ent) * b.Cy
+				Caso matematicaDivision
+					Resultado.Tipo = cVarianteDecimal
+					Resultado.Cy = EntDec(a.Ent) / b.Cy
+				Caso matematicaPotencia
+					Resultado.Tipo = cVarianteDecimal
+					Resultado.Cy = RealDec2(EntReal(a.Ent) ^ DecReal(b.Cy))
+			FinSeleccionar
+
+		Caso cVarianteDecimal + (10 * cVarianteCadena)
+			Seleccionar op
+				Caso matematicaSuma
+					Resultado.Tipo = cVarianteCadena
+					Resultado.Cad = DecCad(a.Cy) + b.Cad
+			FinSeleccionar
+		Caso cVarianteDecimal + (10 * cVarianteReal)
+			Seleccionar op
+				Caso matematicaSuma
+					Resultado.Tipo = cVarianteDecimal
+					Resultado.Cy = a.Cy + RealDec2(b.Dbl)
+				Caso matematicaResta
+					Resultado.Tipo = cVarianteDecimal
+					Resultado.Cy = a.Cy - RealDec2(b.Dbl)
+				Caso matematicaMultiplicacion
+					Resultado.Tipo = cVarianteDecimal
+					Resultado.Cy = a.Cy * RealDec2(b.Dbl)
+				Caso matematicaDivision
+					Resultado.Tipo = cVarianteDecimal
+					Resultado.Cy = a.Cy / RealDec2(b.Dbl)
+				Caso matematicaPotencia
+					Resultado.Tipo = cVarianteDecimal
+					Resultado.Cy = RealDec2(DecReal(a.Cy) ^ b.Dbl)
+			FinSeleccionar
+		Caso cVarianteDecimal + (10 * cVarianteEntero)
+			Seleccionar op
+				Caso matematicaSuma
+					Resultado.Tipo = cVarianteDecimal
+					Resultado.Cy = a.Cy + EntDec(b.Ent)
+				Caso matematicaResta
+					Resultado.Tipo = cVarianteDecimal
+					Resultado.Cy = a.Cy - EntDec(b.Ent)
+				Caso matematicaMultiplicacion
+					Resultado.Tipo = cVarianteDecimal
+					Resultado.Cy = a.Cy * EntDec(b.Ent)
+				Caso matematicaDivision
+					Resultado.Tipo = cVarianteDecimal
+					Resultado.Cy = a.Cy / EntDec(b.Ent)
+				Caso matematicaPotencia
+					Resultado.Tipo = cVarianteDecimal
+					Resultado.Cy = RealDec2(DecReal(a.Cy) ^ EntReal(b.Ent))
+			FinSeleccionar
+		Caso cVarianteDecimal + (10 * cVarianteDecimal)
+			Seleccionar op
+				Caso matematicaSuma
+					Resultado.Tipo = cVarianteDecimal
+					Resultado.Cy = a.Cy + b.Cy
+				Caso matematicaResta
+					Resultado.Tipo = cVarianteDecimal
+					Resultado.Cy = a.Cy - b.Cy
+				Caso matematicaMultiplicacion
+					Resultado.Tipo = cVarianteDecimal
+					Resultado.Cy = a.Cy * b.Cy
+				Caso matematicaDivision
+					Resultado.Tipo = cVarianteDecimal
+					Resultado.Cy = a.Cy / b.Cy
+				Caso matematicaPotencia
+					Resultado.Tipo = cVarianteDecimal
+					Resultado.Cy = RealDec2(DecReal(a.Cy) ^ DecReal(b.Cy))
+			FinSeleccionar
+	FinSeleccionar
+	Si Resultado.Tipo = cVarianteNulo Entonces GenerarError errTipoIncompatible
+FinProc
+
+
+Proc CadenaVariante(a:Cadena):cVariante
+	Resultado.Tipo = cVarianteCadena
+	Resultado.Cad = a
+FinProc
+
+
+Proc RealVariante(a:Real):cVariante
+	Resultado.Tipo = cVarianteReal
+	Resultado.Dbl = a
+FinProc
+
+
+Proc EnteroVariante(a:EnteroSig):cVariante
+	Resultado.Tipo = cVarianteEntero
+	Resultado.Ent = a
+FinProc
+
+
+Proc BooleanoVariante(a:Booleano):cVariante
+	Resultado.Tipo = cVarianteBooleano
+	Resultado.Bool = a
+FinProc
+
+
+Proc DecimalVariante(a:Decimal):cVariante
+	Resultado.Tipo = cVarianteDecimal
+	Resultado.Cy = a
+FinProc
+
+

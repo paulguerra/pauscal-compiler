@@ -1,0 +1,126 @@
+Importar "Globales.prp"
+Importar "Tipos.prp"
+Importar "IO.prp"
+
+$EBC- 'Desactivamos EBC para activar la evaluación booleana parcial
+
+
+'LocalAdm 0
+Proc AdmLocalAgregar(Referencia nuevaVar:cVar)
+	varLocales = varLocales + [nuevaVar]
+FinProc
+
+'LocalAdm 2
+Proc DescargarLocales():Entero
+FinProc
+
+'GlobalAdm ?
+Proc AdmGlobalAgregar(Referencia nuevaVar:cVar)
+	vars = vars + [nuevaVar]
+FinProc
+
+
+Proc LiberarVariables(Referencia vars[]:cVar, Opcional alcance:Entero, Opcional excluirImportados:Booleano)
+	Var i,idTipo:EnteroSig
+	
+	Contar i = 0 a LongMat(vars)-1
+		Eval vars[i]
+			Si (Neg excluirImportados) Or ((.Flags And vinfImportado) = 0) Entonces
+				idTipo = EsTipo(.Tipo)
+				Si .EsParam Entonces
+					Si (.Flags And vinfRef) = 0 Entonces
+						Si .Cantidad <> 0 Entonces
+							Escribir("push -1")
+							Escribir("push " + ObtenerNombreInternoDeTipo(.Tipo))
+							Push(.Nombre, alcance, Falso)
+							Escribir("call pscExtAryFree")
+						Sino; Si .Tipo = pCadena Entonces
+							Push(.Nombre, alcance, Falso)
+							Escribir("call pscMemFree")
+						Sino; Si idTipo = 2 Entonces
+							Si DebeSerLiberado(.Tipo) Entonces
+								Escribir("push " + ObtenerNombreInternoDeTipo(.Tipo))
+								Push(.Nombre, alcance, Falso)
+								Escribir("call pscExtStructFree")
+							FinSi
+							Push(.Nombre, alcance, Falso)
+							Escribir("call pscMemFreeNoPtr")
+						Sino; Si idTipo = 3 Entonces
+							Escribir("push " + ObtenerNombreInternoDeTipo(.Tipo))
+							Push(.Nombre, alcance, Verd)
+							Escribir("call pscExtStructFree")
+						FinSi;FinSi;FinSi;FinSi
+					FinSi
+				SiNo
+					Si .Cantidad <> 0 Entonces
+						Si DebeSerLiberado(.Tipo) Entonces
+							EscribirI("push ", .Cantidad)
+							Escribir("push " + ObtenerNombreInternoDeTipo(.Tipo))
+							Push(.Nombre, alcance, Verd)
+							Escribir("call pscExtAryFree")
+						SiNo; Si .Cantidad = -1 Entonces
+							Push(.Nombre, alcance, Falso)
+							Escribir("call pscMemFree")
+						FinSi;FinSi
+					Sino; Si .Tipo = pCadena Entonces
+						Push(.Nombre, alcance, Falso)
+						Escribir("call pscMemFree")
+					Sino; Si ((idTipo = 2) And DebeSerLiberado(.Tipo)) Or (idTipo = 3) Entonces
+						Escribir("push " + ObtenerNombreInternoDeTipo(.Tipo))
+						Push(.Nombre, alcance, Verd)
+						Escribir("call pscExtStructFree")
+					FinSi;FinSi;FinSi
+				FinSi
+			FinSi
+		FinEval
+	Seguir
+FinProc
+
+Privado:
+
+Proc DebeSerLiberado(tipo:Cadena):Booleano
+	Var indice:EnteroSig
+	
+	indice = AdmTipoBuscar(tipo)
+	Si indice = -1 Entonces Salir
+	Eval tipos[indice]
+		Devolver ((.Flags And tinfUnión) = 0) And ((.Flags And tinfComplejo) <> 0)
+	FinEval
+FinProc
+
+
+Proc Push(nombre:Cadena, alcance:Entero, puntero:Booleano)
+	Var pos:Entero
+	
+	Si puntero Entonces
+		Seleccionar alcance
+			Caso 1
+				Escribir("lea ebx,[__" + nombre + "_]")
+				Escribir("push ebx")
+			Caso 0
+				Escribir("push offset [__" + nombre + "]")
+			Caso Otro
+				pos = AdmClaseOffset(idClaseActual, nombre)
+				Si pos > 0 Entonces
+					EscribirU("lea ebx,[esi+{0}]", pos)
+					Escribir("push ebx")
+				SiNo
+					Escribir("push esi")
+				FinSi
+		FinSeleccionar
+	SiNo
+		Seleccionar alcance
+			Caso 1
+				Escribir("push dword ptr [__" + nombre + "_]")
+			Caso 0
+				Escribir("push dword ptr [__" + nombre + "]")
+			Caso Otro
+				pos = AdmClaseOffset(idClaseActual, nombre)
+				Si pos > 0 Entonces
+					EscribirU("push dword ptr [esi+{0}]", pos)
+				SiNo
+					Escribir("push dword ptr [esi]")
+				FinSi
+		FinSeleccionar
+	FinSi
+FinProc

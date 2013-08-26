@@ -1,0 +1,106 @@
+Importar "Cadena.prp"
+Importar "Globales.prp"
+Importar "Errores.prp"
+
+$EBC- 'Desactivamos EBC para activar la evaluación booleana parcial
+
+
+Proc EsAlfanumérico(char:Byte):Entero, "user32" "IsCharAlphaNumericA"
+
+
+Proc EsIdentificadorInvalido(nombre:Cadena):Booleano
+	Var i:EnteroSig
+	Var car:Cadena
+	
+	Si Longitud(nombre) = 0 Entonces Devolver Verd
+	Si ComienzaConNúmero(nombre) Entonces Devolver Verd
+	Contar i = 1 a Longitud(nombre)
+		car = ParteCad(nombre, i, 1)
+		Si (BuscarEnCad(cSeparadores, car) > 0) Or ((EsAlfanumérico(Ascii(car)) = 0) And (car <> "_")) Entonces Devolver Verd
+	Seguir
+	nombre = CadMinus(nombre)
+	Contar i = 0 a LongMat(palabrasClave)-1
+		Si nombre = palabrasClave[i] Entonces Devolver Verd
+	Seguir
+	Si (IzquierdaCad(nombre, 1) = "_") Or (DerechaCad(nombre, 1) = "_") Entonces AgregarError(30, Falso)
+	Devolver Falso
+FinProc
+
+
+Proc EsIdentificador(nombre:Cadena, alcance:Entero, Opcional tipo:Cadena, Opcional idClase:Entero):Booleano
+FinProc
+
+
+Proc EsIgual(Referencia texto:Cadena, chequeo:Entero):Booleano
+	Seleccionar chequeo
+		Caso ictInProcInvalidDecl
+			Seleccionar CadMinus(texto)
+				Caso "var","finproc"
+					Salir
+			FinSeleccionar
+		Caso ictInPropInvalidDecl
+			Seleccionar CadMinus(texto)
+				Caso "lec","esc","finprop"
+					Salir
+			FinSeleccionar
+		Caso ictInClassInvalidDecl
+			Seleccionar CadMinus(texto)
+				Caso "proc","prop","constructor","destructor","finproc","finclase","privado","público","clasevar","const","estruc","unión"
+					Salir
+			FinSeleccionar
+		Caso ictFreeCodeInvalidDecl
+			Seleccionar CadMinus(texto)
+				Caso "const","proc","prototipo","clase","var","estruc","unión","importar","privado","público"
+					Salir
+			FinSeleccionar
+		Caso ictInSelectInvalidDecl
+			Seleccionar CadMinus(texto)
+				Caso "caso","finseleccionar"
+					Salir
+			FinSeleccionar
+		Caso ictDecFileInvalidInst
+			Seleccionar CadMinus(texto)
+				Caso "var","estruc","unión","const","proc","finproc","prototipo","importar","clase","finclase","prop","finprop","lec","esc", _
+					  "privado","público","constructor","destructor","clasevar"
+					Salir
+			FinSeleccionar
+	FinSeleccionar
+	Devolver Verd
+FinProc
+
+
+Proc ComienzaConNúmero(nombre:Cadena):Booleano
+	Si Longitud(nombre) > 0 Entonces
+		AdmErr
+			CadEnt(IzquierdaCad(nombre,1))
+		Controlar
+			Devolver Falso
+		FinAdmErr
+		Devolver Verd
+	FinSi
+	Devolver Falso
+FinProc
+
+
+Proc EsNumérico(str:Cadena):Booleano
+	AdmErr
+		CadEnt(str)
+		Devolver Verd
+	Controlar
+		Devolver Falso
+	FinAdmErr
+FinProc
+
+
+Proc EsReal(num:Real):Booleano
+	Si num > 4294967295 Entonces Devolver Verd
+	Si EsFrac(num) Entonces Devolver Verd
+FinProc
+
+
+Proc EsFrac(num:Real):Booleano
+	Var cad:Cadena
+	
+	cad = RealCad(num)
+	Resultado = (BuscarEnCad(cad, ".") > 0) Or (BuscarEnCad(cad, ",") > 0)
+FinProc

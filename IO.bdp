@@ -1,0 +1,141 @@
+Importar "Globales.prp"
+Importar "Cadena.prp"
+Importar "Conversiones.prp"
+Importar "Win32.prp"
+Importar "Aleatorios.prp"
+
+$EBC- 'Desactivamos EBC para activar la evaluación booleana parcial
+
+
+Proc ObtenerRuta(archivo:Cadena):Cadena
+	Var pos:Entero
+	
+	pos = BuscarEnCadInv(archivo, "\")
+	Devolver > pos>0 ? IzquierdaCad(archivo, pos-1) : archivo
+FinProc
+
+
+Proc Escribir(texto:Cadena, Opcional sinNuevaLinea:Booleano)
+	Si sinDiscos > 0 Entonces
+		pila.Item(sinDiscos) = pila.Item(sinDiscos) + texto + (> sinNuevaLinea ? "" : CrLf)
+	SiNo
+		archivoAsm.EscribirCad(texto + (> sinNuevaLinea ? "" : CrLf))
+	FinSi
+FinProc
+
+
+Proc EscribirI(texto:Cadena, val1:EnteroSig, Opcional val2:EnteroSig, Opcional val3:EnteroSig, Opcional val4:EnteroSig)
+	Var valores[]:Cadena
+	valores = [EntCad(val1),EntCad(val2),EntCad(val3),EntCad(val4)]
+	ReemplazarEnCadena(texto, valores)
+	Escribir(texto)
+FinProc
+
+
+Proc EscribirU(texto:Cadena, val1:Entero, Opcional val2:Entero, Opcional val3:Entero, Opcional val4:Entero)
+	Var valores[]:Cadena
+	valores = [EntCad(val1),EntCad(val2),EntCad(val3),EntCad(val4)]
+	ReemplazarEnCadena(texto, valores)
+	Escribir(texto)
+FinProc
+
+
+Proc CrearArchivoNuevo(archivo:Cadena):pscArchivo
+	Crear Resultado
+	Resultado.Nombre = archivo
+	Resultado.CrearNuevo(Verd)
+FinProc
+
+
+Proc TamañoArchivo(archivo:Cadena):Entero
+	Var arch:pscArchivo
+	
+	Crear arch
+	arch.Nombre = archivo
+	arch.Abrir()
+	Devolver arch.Tamaño
+FinProc
+
+
+Proc GranAleatorio():Entero
+	Devolver GenerarNúmeroAlAzar(0, 2000000000)
+FinProc
+
+
+Proc GranAleatorioCad():Cadena
+	Devolver EntCad(GenerarNúmeroAlAzar(0, 2000000000))
+FinProc
+
+
+Proc AgregarDato(dato:Cadena, tipo:Cadena, Opcional noReutilizar:Booleano):Cadena
+	Var i:EnteroSig
+	Var nuevoDato:cDato
+	
+	Si Neg noReutilizar And (Longitud(dato) <> 0) Entonces
+		Contar i = 0 a LongMat(datos)-1
+			Eval datos[i]
+				Si .Dato = dato Entonces Devolver .Id
+			FinEval
+		Seguir
+	FinSi
+	nuevoDato.Dato = dato
+	nuevoDato.Tipo = tipo
+	nuevoDato.Id = "d" + EntCad(LongMat(datos)) + "$" + GranAleatorioCad()
+	Resultado = nuevoDato.Id
+	datos = datos + [nuevoDato]
+FinProc
+
+
+Proc LimpiarArchivo(archivo:Cadena)
+	Var arch:pscArchivo
+	Var temp:pscArchivo
+	Var línea:Cadena
+
+	Crear arch,temp
+	AdmErr
+		arch.Nombre = archivo
+		temp.Nombre = vArchivoTemp
+		arch.Abrir()
+		temp.CrearNuevo(Verd)
+		Mientras Neg arch.FinDeArchivo
+			línea = arch.LeerLínea()
+			Si Longitud(línea) <> 0 Entonces arch.EscribirCad(línea + CrLf)
+		FinMientras
+	Finalmente
+		arch.Cerrar()
+		temp.Cerrar()
+		RenombrarArchivo(vArchivoTemp, archivo)
+	FinAdmErr
+FinProc
+
+
+Privado:
+
+
+Proc ReemplazarEnCadena(Referencia texto:Cadena, Referencia valores[]:Cadena)
+	Var i,pos:EnteroSig
+	Var match:Cadena
+	
+	Contar i = 0 a LongMat(valores)-1
+		match = "{" + EntCad(i) + "}"
+		Repetir
+			pos = BuscarEnCad(texto, match)
+			Si pos = 0 Entonces Salir Repetir
+			texto = IzquierdaCad(texto, pos-1) + valores[i] + ParteCad(texto, pos+Longitud(match))
+		PorSiempre
+	Seguir
+FinProc
+
+
+
+
+Proc Test_IO()
+	Var ret:Cadena
+	Var fail:Booleano
+	
+	ret = ArreglarRuta("C:\Archivos de programa\Pauscal\Editor\Compilador\Globales.prp")
+	fail = fail Or (ret <> "c:\archivos de programa\pauscal\editor\compilador\globales.prp")
+	
+	ret = ArreglarRuta("Globales.prp", "C:\Archivos de programa\Pauscal\Editor\Compilador")
+	fail = fail Or (ret <> "c:\archivos de programa\pauscal\editor\compilador\globales.prp")
+FinProc

@@ -1,0 +1,233 @@
+Importar "Cadena.prp"
+Importar "Globales.prp"
+Importar "Conversiones.prp"
+Importar "Errores.prp"
+Importar "Precomp.prp"
+Importar "Validadores.prp"
+Importar "Variables.prp"
+Importar "Expresiones.prp"
+Importar "Tipos.prp"
+
+$EBC- 'Desactivamos EBC para activar la evaluación booleana parcial
+
+
+Proc InstrucciónPreprocesador(Referencia nroPalabra:Entero, Referencia debeSalir:Booleano)
+	Var sumarUnoMas:Booleano
+	
+	nroPalabra = 2
+	Seleccionar CadMayus(palabras[1])
+		Caso "EBC"
+			optBoolCompleto = palabras[2] <> "-"
+			sumarUnoMas = Neg optBoolCompleto
+		Caso "ADV"
+			optAdvertencias = palabras[2] <> "-"
+			sumarUnoMas = Neg optAdvertencias
+		Caso  "CED"
+			optCadenasExternas = palabras[2] <> "-"
+			sumarUnoMas = Neg optCadenasExternas
+		Caso "FILEPATH"
+			rutaActual = QuitarComillas(palabras[2])
+			linea = linea - 1
+			debeSalir = Verd
+			sumarUnoMas = Verd
+		Caso Otro
+			AgregarError(52, Falso, palabras[2])
+	FinSeleccionar
+	Si sumarUnoMas Entonces nroPalabra = nroPalabra + 1
+FinProc
+
+
+Proc InstrucciónModificadorAlcance(Referencia nroPalabra:Entero)
+	Si palabras[1] <> ":" Entonces AgregarError(1, Falso, "':'")
+	Si idProcActual <> -1 Entonces AgregarError(5, Falso)
+	Si idClaseActual <> -1 Entonces
+		zonaPrivadaClase = CadMinus(palabras[0]) = "privado"
+	SiNo
+		zonaPrivada = CadMinus(palabras[0]) = "privado"
+	FinSi
+	nroPalabra = 2
+FinProc
+
+
+Proc InstrucciónImportar(Referencia nroPalabra:Entero, precompilar:Booleano)
+	Var archivo:Cadena
+	
+	archivo = QuitarComillas(palabras[1])
+	Si Longitud(archivo) = 0 Entonces AgregarError(1, Falso, "Nombre de archivo")
+	Si (idProcActual <> -1) Or (idClaseActual <> -1) Entonces AgregarError(5, Falso)
+	Si precompilar Entonces ImportarDatos(archivo, Falso)
+	nroPalabra = 2
+FinProc
+
+
+Proc InstrucciónConst(Referencia nroPalabra:Entero, precompilar:Booleano, Referencia debeSalir:Booleano)
+	Var nombre:Cadena
+	Var nuevoConst:cConst
+	
+	Si Neg precompilar Entonces debeSalir = Verd; Salir
+	Repetir
+		nroPalabra = nroPalabra + 1
+		nombre = CadMinus(palabras[nroPalabra])
+		Si EsIdentificadorInvalido(nombre) Entonces AgregarError(10, Falso, nombre)
+		Si EsIdentificador(nombre, idhGlobalVarConst) Entonces AgregarError(2, Falso, palabras[nroPalabra])
+		Si palabras[nroPalabra+1] <> "=" Entonces AgregarError(1, Falso, "'='")
+		nroPalabra = nroPalabra + 2
+		nuevoConst.Nombre = nombre
+		nuevoConst.Rep = ConcatenarConsts(nroPalabra)
+		nuevoConst.Flags = > zonaPrivada ? csinfPrivado : 0
+		consts = consts + [nuevoConst]
+	HastaQue palabras[nroPalabra] <> ","
+FinProc
+
+
+Proc ConcatenarConsts(Referencia nroPalabra:Entero):Cadena[]
+	Var p,cnt:Entero
+	Repetir
+		Si Longitud(palabras[nroPalabra]) = 0 Entonces
+			Si (p <> 0) Or (cnt = 0) Entonces AgregarError(0, Falso)
+			Salir
+		FinSi
+		Seleccionar palabras[nroPalabra]
+			Caso "[", "(", "{"
+				p = p + 1
+			Caso "]", ")", "}"
+				Si p = 0 Entonces AgregarError(0, Falso)
+				p = p - 1
+			Caso ","
+				Si p = 0 Entonces Salir Repetir
+		FinSeleccionar
+		Resultado = Resultado + [palabras[nroPalabra]]
+		cnt = cnt+1
+		nroPalabra=nroPalabra+1
+	PorSiempre
+	Resultado = Resultado + ["", ""]
+FinProc
+
+
+Proc InstrucciónVar(Referencia nroPalabra:Entero, precompilar:Booleano, Referencia debeSalir:Booleano)
+	Var vars[]:cVar
+	Var i:EnteroSig
+	
+	Si comienzoDelMain Entonces AgregarError(5, Falso)
+	nroPalabra = 1
+	Si idProcActual <> -1 Entonces
+		vars = CompilarListaVariables(nroPalabra, Falso, cvlVarLocal)
+	SiNo
+		Si Neg precompilar Entonces debeSalir = Verd; Salir
+		vars = CompilarListaVariables(nroPalabra, Falso, cvlVar)
+	FinSi
+	Contar i = 0 a LongMat(vars)-1
+		Si idProcActual <> -1 Entonces
+			AdmLocalAgregar(vars[i])
+		SiNo
+			AdmGlobalAgregar(vars[i])
+		FinSi
+	Seguir
+FinProc
+
+
+Proc InstrucciónClaseVar(Referencia nroPalabra:Entero, precompilar:Booleano, Referencia debeSalir:Booleano)
+	Var vars[]:cVar
+	Var i:EnteroSig
+	
+	Si (idClaseActual = 0) Or (idProcActual = 0) Or (idPropActual = 0) Entonces AgregarError(5, Falso)
+	Si Neg precompilar Entonces debeSalir = Verd; Salir
+	nroPalabra = 1
+	vars = CompilarListaVariables(nroPalabra, Falso, cvlVar)
+	Si zonaPrivada Entonces
+		Contar i = 0 a LongMat(vars)-1
+			ActivarFlag(vars[i].Flags, vinfPrivado)
+		Seguir
+	FinSi
+	AdmClaseAgregarVariables(idClaseActual, vars)
+FinProc
+
+
+Privado:
+
+
+Proc CompilarListaVariables(Referencia nroPalabra:Entero, soloUna:Booleano, nivel:Entero, Opcional tipo:Cadena, Opcional claseId:Entero):cVar[]
+	Var nuevaVar:cVar
+	Var i:EnteroSig
+	Var constNum:Real
+	Var t:Cadena
+	Var initEst:EnteroSig
+	
+	initEst = -1
+	Repetir
+		Eval nuevaVar
+			Si palabras[nroPalabra] = "@" Entonces
+				.Puntero = Verd
+				nroPalabra = nroPalabra + 1
+			SiNo
+				.Puntero = Falso
+			FinSi
+			.Nombre = CadMinus(palabras[nroPalabra])
+			Si Longitud(.Nombre) Entonces
+				Si (.Nombre = ",") Or (.Nombre = "[") Or (.Nombre = ":") Entonces
+					.Nombre = ""
+				SiNo
+					Si EsIdentificadorInvalido(.Nombre) Entonces AgregarError(10, Falso, palabras[nroPalabra])
+					Contar i = 0 a LongMat(Resultado)-1
+						Si Resultado[i].Nombre = .Nombre Entonces AgregarError(2, Falso, palabras[nroPalabra])
+					Seguir
+					Seleccionar nivel
+						Caso cvlVar
+							Si EsIdentificador(.Nombre, idhGlobalVarConst) Entonces AgregarError(2, Falso, palabras[nroPalabra])
+						Caso cvlClass
+							Si EsIdentificador(.Nombre, idhClaseMember, , claseId) Entonces AgregarError(2, Falso, palabras[nroPalabra])
+						Caso cvlEstruc
+							Si EsIdentificador(.Nombre, idhTipoMember, tipo) Entonces AgregarError(2, Falso, palabras[nroPalabra])
+						Caso cvlLocalVar
+							Si EsIdentificador(.Nombre, idhLocalVar) Entonces AgregarError(2, Falso, palabras[nroPalabra])
+					FinSeleccionar
+					nroPalabra = nroPalabra + 1
+				FinSi
+			FinSi
+			Si palabras[nroPalabra] = "[" Entonces
+				nroPalabra = nroPalabra + 1
+				Si palabras[nroPalabra] = "]" Entonces
+					.Cantidad = -1
+				SiNo
+					constNum = EvalConstNumérico(nroPalabra)
+					Si EsReal(constNum) Entonces AgregarError(4, Falso)
+					.Cantidad = RealEnt(constNum)
+					Si .Cantidad < 1 Entonces AgregarError(53, Falso)
+					Si palabras[nroPalabra] <> "]" Entonces AgregarError(1, Falso, "']'")
+				FinSi
+				nroPalabra = nroPalabra + 1
+				Si .Puntero Entonces AgregarError(7, Falso)
+			FinSi
+			Si palabras[nroPalabra] = ":" Entonces
+				t = CadMinus(palabras[nroPalabra+1])
+				Si Longitud(t) = 0 Entonces AgregarError(0, Falso)
+				Si EsTipo(t) = 0 Entonces AgregarError(6, Falso)
+				Si initEst = -1 Entonces
+					.Tipo = t
+					Si (.Cantidad = 0) And (EsTipo(.Tipo) = 4) Entonces .Puntero = Verd
+				SiNo
+					Contar i = LongMat(Resultado)-1 a initEst Dec
+						Eval Resultado[i]
+							.Tipo = t
+							Si (.Cantidad = 0) And (EsTipo(.Tipo) = 4) Entonces .Puntero = Verd
+						FinEval
+					Seguir
+					initEst = -1
+				FinSi
+				nroPalabra = nroPalabra + 2
+			SiNo
+				Si initEst = -1 Entonces
+					initEst = LongMat(Resultado) 'Sin el -1 ya que debe incluir la nueva variable
+				FinSi
+			FinSi
+		FinEval
+		Resultado = Resultado + [nuevaVar]
+		Si initEst <> -1 Entonces
+			Si palabras[nroPalabra] <> "," Entonces AgregarError(1, Falso, "':'")
+		SiNo
+			Si palabras[nroPalabra] <> "," Entonces Salir Repetir
+			Si soloUna Entonces Salir Repetir
+		FinSi
+		nroPalabra = nroPalabra + 1
+	PorSiempre
+FinProc

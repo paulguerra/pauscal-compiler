@@ -1,0 +1,142 @@
+Importar "Declare.prp"
+Importar "Globales.prp"
+
+$EBC- 'Desactivamos EBC para activar la evaluación booleana parcial
+
+
+Proc CopiarArchivo(archivo:Cadena, destino:Cadena, Opcional sobreescribir:Booleano)
+	Si CopyFile(archivo, destino, sobreescribir) = 0 Entonces GenerarError errErrorEnArchivo, "Error al copiar archivo"
+FinProc
+
+
+Proc RenombrarArchivo(archivo:Cadena, destino:Cadena, Opcional sobreescribir:Booleano)
+	CopiarArchivo(archivo, destino, sobreescribir)
+	BorrarArchivo(archivo)
+FinProc
+
+
+Proc EjecutarExterno(comando:Cadena)
+	Var startInfo:STARTUPINFO
+	Var procInfo:PROCESS_INFORMATION
+	
+	startInfo.cb = Long(startInfo)
+	startInfo.dwFlags = 1
+	CreateProcess(Nulo, comando, 0, 0, 0, 0, 0, rutaActual, startInfo, procInfo)
+	WaitForSingleObject(procInfo.hProcess, -1)
+FinProc
+
+
+Proc ArreglarRuta(ruta:Cadena, Opcional base:Cadena):Cadena
+	Var buf:Cadena
+	
+	Si BuscarEnCad(ruta, ":\") = 0 Entonces 'Si es una ruta relativa
+		Si Longitud(base) = 0 Entonces base = rutaActual
+		buf = base + RepCarac(0, 300)
+		PathAppend(buf, ruta)
+		ruta = buf
+	SiNo
+		buf = RepCarac(0, 300)
+	FinSi
+	PathCanonicalize(buf, ruta)
+	Resultado = CadMinus(TruncarCadena(buf))
+FinProc
+
+
+Proc ObtenerDirectorioDelEjecutable():Cadena
+	Var ret[],buf:Cadena
+	
+	ret = ObtenerLíneaComando()
+	Devolver ret[0]
+FinProc
+
+
+Proc ObtenerLíneaComando():Cadena[]
+	Var ptr,i:Entero
+	Var ret,param,car:Cadena
+	Var dentro,fueEspacio:Booleano
+	
+	ret = RepCarac(0, 2000)
+	ptr = GetCommandLine()
+	CopyMemory(CadPtr(ret), ptr, Longitud(ret))
+	ret = TruncarCadena(ret)
+	Contar i = 1 a Longitud(ret)
+		car = ParteCad(ret, i, 1)
+		Seleccionar car
+			Caso " "
+				Si dentro Entonces
+					param = param + car
+					fueEspacio = Falso
+				SiNo
+					Si Neg fueEspacio Entonces
+						Resultado = Resultado + [param]
+						param = ""
+						fueEspacio = Verd
+					FinSi
+				FinSi
+			Caso #34
+				dentro = Neg dentro
+				fueEspacio = Falso
+			Caso otro
+				param = param + car
+				fueEspacio = Falso
+		FinSeleccionar
+	Seguir
+	Si Longitud(param) <> 0 Entonces Resultado = Resultado + [param]
+FinProc
+
+
+Proc Ticks():Entero
+	Devolver GetTickCount()
+FinProc
+
+
+Proc PostearNotificación(valor:Entero)
+	Si hwndNotificaciones = 0 Entonces Salir
+	SendMessage(hwndNotificaciones, &207, 0, valor) '0x207 es el código que espera el editor para verificar que es un mensaje válido
+FinProc
+
+
+Proc CambiarDirectorioActual(dir:Cadena)
+	Si SetCurrentDirectory(dir) = 0 Entonces GenerarError errParamInv
+FinProc
+
+
+Privado:
+
+
+Estruc PROCESS_INFORMATION, _
+	hProcess, _
+	hThread, _
+	dwProcessId, _
+	dwThreadId:Entero
+
+Estruc STARTUPINFO, _
+	cb:Entero, _
+	lpReserved, _
+	lpDesktop, _
+	lpTitle:Cadena, _
+	dwX, _
+	dwY, _
+	dwXSize, _
+	dwYSize, _
+	dwXCountChars, _
+	dwYCountChars, _
+	dwFillAttribute, _
+	dwFlags:Entero, _
+	wShowWindow, _
+	cbReserved2:Word, _
+	lpReserved2:Byte, _
+	hStdInput, _
+	hStdOutput, _
+	hStdError:Entero
+
+Proc CreateProcess(Referencia lpApplicationName,lpCommandLine:Cadena, lpProcessAttributes,lpThreadAttributes,bInheritHandles,dwCreationFlags,lpEnvironment:Entero, _
+		Referencia lpCurrentDriectory:Cadena, Referencia lpStartupInfo:STARTUPINFO, Referencia lpProcessInformation:PROCESS_INFORMATION):Entero, "Kernel32" "CreateProcessA"
+Proc WaitForSingleObject(hHandle,dwMilliseconds:EnteroSig):Entero, "Kernel32"
+Proc PathCanonicalize(Referencia pszBuf,pszPath:Cadena):Entero, "shlwapi.dll" "PathCanonicalizeA"
+Proc PathAppend(Referencia pszPath,pMore:Cadena):Entero, "shlwapi.dll" "PathAppendA"
+Proc CopyFile(Referencia lpExistingFileName,lpNewFileName:Cadena, bFailIfExists:Entero):Entero, "Kernel32" "CopyFileA"
+Proc GetCommandLine():Entero, "Kernel32" "GetCommandLineA"
+Proc SendMessage(hWnd,wMsg,wParam,lParam:Entero):Entero, "User32" "SendMessageA"
+Proc SetCurrentDirectory(Referencia lpPathName:Cadena):Entero, "Kernel32" "SetCurrentDirectoryA"
+

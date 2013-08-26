@@ -1,0 +1,8 @@
+Estruc TipoA, _
+	miembroA[]:TipoB
+
+Estruc TipoB, _
+	miembroB:Entero
+
+Var a:TipoA
+Fin

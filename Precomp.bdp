@@ -1,0 +1,292 @@
+Importar "Validadores.prp"
+Importar "Errores.prp"
+Importar "Globales.prp"
+Importar "IO.prp"
+Importar "VisualBasicIO.prp"
+
+$EBC- 'Desactivamos EBC para activar la evaluación booleana parcial
+
+
+Proc ImportarDatos(archivo:Cadena, llamadaInternal:Booleano, Opcional externoPrivado:Booleano)
+	Var nuevoImportado:cImportado
+	
+	Si Longitud(archivo) = 0 Entonces Salir
+	archivo = CadMinus(archivo)
+	Si ExisteEnImportados(archivo, externoPrivado) = -1 Entonces
+		Eval nuevoImportado
+			.Archivo = archivo
+			Si zonaPrivada Entonces .Flags = .Flags Or impinfPrivado
+			Si externoPrivado Entonces .Flags = .Flags Or impinfExtPrivado
+		FinEval
+	FinSi
+	Si llamadaInternal Entonces ImportarArchivoConDatos(archivo)
+FinProc
+
+
+Proc GenerarPrecomp()
+	Var arch:pscArchivo
+	'Var obj[]:Byte
+	
+	arch.Nombre = vArchivoPrecomp
+	arch.CrearNuevo(Verd)
+	EscribirImportados(arch, importados, 0)
+	EscribirEntero(arch, LongMat(importados)+1)
+	EscribirClases(arch, clases)
+	EscribirTipos(arch, tipos)
+	EscribirConsts(arch, consts)
+	EscribirFuncs(arch, procs)
+	EscribirFuncs(arch, procTipos)
+	EscribirVars(arch, vars)
+	'Dejamos vacío el campo obj, así lo completa la función siguiente cuando sea necesario
+	'EscribirBytes(arch, obj)
+FinProc
+
+
+'Esta función completa el archivo .prp final con el archivo .obj especificado
+Proc SellarPrecomp(archivo:Cadena)
+	Var buf[]:byte
+	Var arch:pscArchivo
+	
+	Crear arch
+	arch.Nombre = archivo
+	arch.Abrir()
+	Redim buf, arch.Tamaño
+	arch.Leer(buf[0]@, arch.Tamaño)
+	
+	Crear arch
+	arch.Nombre = vArchivoPrecomp
+	arch.Abrir()
+	arch.Posición = arch.Tamaño
+	EscribirBytes(arch, buf)
+FinProc
+
+
+'Esta función genera archivos temporales .obj para cada archivo importado que existe, y retorna la lista de archivos archivos generados
+Proc GenerarObjTemporales():Cadena
+	Var i:EnteroSig
+	Var arch:pscArchivo
+	Var obj[]:Byte
+	
+	Contar i = 0 a LongMat(importados)-1
+		Crear arch
+		arch.Nombre = ArreglarRuta(importados[i].Archivo)
+		arch.Abrir()
+		
+		'Necesitamos sólo el campo obj, pero para ello tenemos que leer todo lo anterior
+		LeerImportados(arch)
+		LeerEntero(arch)
+		LeerClases(arch)
+		LeerTipos(arch)
+		LeerConsts(arch)
+		LeerFuncs(arch)
+		LeerFuncs(arch)
+		LeerVars(arch)
+		obj = LeerBytes(arch)
+		
+		Crear arch
+		arch.Nombre = "o" + EntCad(i) + ".obj"
+		arch.CrearNuevo(Verd)
+		arch.Escribir(obj[0]@, LongMat(obj))
+		
+		Resultado = Resultado + arch.Nombre
+	Seguir
+FinProc
+
+
+'Quita los archivos generados por GenerarObjTemporales()
+Proc RemoverObjTemporales()
+	Var i:EnteroSig
+	Var nombre:Cadena
+	
+	Contar i = 0 a LongMat(importados)-1
+		nombre = "o" + EntCad(i) + ".obj"
+		Si ExisteArchivo(nombre) Entonces BorrarArchivo(nombre)
+	Seguir
+FinProc
+
+
+Proc ImportarArchivoConDatos(archivo:Cadena)
+	Var ruta:Cadena
+	Var arch:pscArchivo
+	Var i:EnteroSig
+	
+	Var importadosLocal[]:cImportado
+	
+	ruta = ResolverLib(archivo)
+	Si Longitud(ruta) = 0 Entonces AgregarError(16, Falso, CadMayus(SimplificarRuta(archivo)))
+	Si DerechaCad(ruta, 4) = ".bdp" Entonces
+		'TODO: Hay un error en esta lógica
+		Si esBibPrecomp Entonces CopiarArchivo(vArchivoPrecomp, archivoPrincipal + ".prp")
+		archivo = archivo + ".prp"
+		Si Neg ExisteArchivo(archivo) Entonces EjecutarExterno("Compiler /p /err " + ObtenerLibs() + " /f "#34 + ruta + #34)
+		ruta = archivo
+	FinSi
+	
+	Crear arch
+	arch.Nombre = ruta
+	arch.Abrir()
+	importadosLocal = LeerImportados(arch) 'importados
+	LeerEntero(arch) 'cantidad de importados (los ignoramos y usamos el tamaño de la matriz)
+	Contar i = 0 a LongMat(importadosLocal)-1
+		Eval importadosLocal[i]
+			ImportarDatos(.Archivo, Verd, (.Flags And impinfExtPrivado) <> 0)
+		FinEval
+	Seguir
+	
+	i = ExisteEnImportados(archivo, Verd)
+	Si i <> -1 Entonces
+		Eval importados[i]
+			Si (.Flags And impinfCopiadoAGlobal) <> 0 Entonces Salir
+			.Flags = .Flags Or impinfCopiadoAGlobal
+		FinEval
+	FinSi
+	
+	IntegrarEnGlobales(arch)
+	
+	arch.Cerrar()
+FinProc
+
+
+Privado:
+
+
+Proc ResolverLib(lib:Cadena):Cadena
+	Var i:EnteroSig
+	
+	Resultado = ArreglarRuta(lib)
+	Si ExisteArchivo(Resultado) Entonces Salir
+	Contar i = 0 a LongMat(libs)-1
+		Resultado = ArreglarRuta(lib, libs[i])
+		Si ExisteArchivo(Resultado) Entonces Salir
+	Seguir
+	Resultado = ""
+FinProc
+
+
+Proc ObtenerLibs():Cadena
+	Var i:EnteroSig
+	
+	Contar i = 0 a LongMat(libs)-1
+		Resultado = Resultado + " /lib "#34 + libs[i] + #34" "
+	Seguir
+FinProc
+
+
+Proc ExisteEnImportados(archivo:Cadena, Opcional noChequearMismo:Booleano):EnteroSig
+	Var i:EnteroSig
+	
+	Contar i = 0 a LongMat(importados)-1
+		Si SimplificarRuta(importados[i].Archivo) = archivo Entonces Devolver i
+	Seguir
+	Si Neg noChequearMismo Entonces Si archivo = CadMinus(SimplificarRuta(archivoPrincipal)) Entonces AgregarError(69, Falso)
+	Resultado = -1
+FinProc
+
+
+Proc IntegrarEnGlobales(arch:pscArchivo)
+	Var clasesLocales[]:cClase
+	Var tiposLocales[]:cTipo
+	Var constsLocales[]:cConst
+	Var procsLocales[]:cFunc
+	Var procTiposLocales[]:cFunc
+	Var varsLocales[]:cVar
+	Var i,j:EnteroSig
+	Var nombre:Cadena
+	
+	'Ya se leyeron los importados en la la función anterior
+	'Continuar desde ahí
+	
+	clasesLocales = LeerClases(arch)
+	Contar i = 0 a LongMat(clasesLocales)-1
+		Eval clasesLocales[i]
+			nombre = CadMayus(.Nombre)
+			Si EsIdentificador(nombre, idhGlobalDec) Entonces AgregarError(20, Falso, nombre)
+			.Flags = .Flags Or cinfImportada
+			.Usado = Falso
+			Si .IdHeredero <> 0 Entonces .IdHeredero = .IdHeredero + LongMat(clases)
+			Si (.Flags And cinfPrivada) = 0 Entonces
+				Contar j = 0 a LongMat(.Métodos)-1
+					Eval .Métodos[j]
+						.Id = j
+						.Flags = .Flags Or finfImportado
+						.Usado = Falso
+					FinEval
+				Seguir
+			FinSi
+		FinEval
+	Seguir
+	Si (LongMat(clases)+LongMat(clasesLocales))>0 Entonces clases = clases + clasesLocales
+	Borrar clasesLocales
+	
+	tiposLocales = LeerTipos(arch)
+	Contar i = 0 a LongMat(tiposLocales)-1
+		Eval tiposLocales[i]
+			nombre = CadMayus(.Nombre)
+			Si EsIdentificador(nombre, idhGlobalDec) Entonces AgregarError(20, Falso, nombre)
+			DesactivarFlag(.Flags, tinfUsado)
+			ActivarFlag(.Flags, tinfImportado)
+		FinEval
+	Seguir
+	Si (LongMat(tipos)+LongMat(tiposLocales))>0 Entonces tipos = tipos + tiposLocales
+	Borrar tiposLocales
+	
+	constsLocales = LeerConsts(arch)
+	Contar i = 0 a LongMat(constsLocales)-1
+		Eval constsLocales[i]
+			nombre = CadMayus(.Nombre)
+			Si EsIdentificador(nombre, idhGlobalDec) Entonces AgregarError(20, Falso, nombre)
+		FinEval
+	Seguir
+	Si (LongMat(consts)+LongMat(constsLocales))>0 Entonces consts = consts + constsLocales
+	Borrar constsLocales
+	
+	procsLocales = LeerFuncs(arch)
+	Contar i = 0 a LongMat(procsLocales)-1
+		Eval procsLocales[i]
+			nombre = CadMayus(.Nombre)
+			Si EsIdentificador(nombre, idhGlobalDec) Entonces AgregarError(20, Falso, nombre)
+			.Id = i
+			.Flags = .Flags Or finfImportado
+			.Usado = Falso
+		FinEval
+	Seguir
+	Si (LongMat(procs)+LongMat(procsLocales))>0 Entonces procs = procs + procsLocales
+	Borrar procsLocales
+	
+	procTiposLocales = LeerFuncs(arch)
+	Contar i = 0 a LongMat(procTiposLocales)-1
+		Eval procTiposLocales[i]
+			nombre = CadMayus(.Nombre)
+			Si EsIdentificador(nombre, idhGlobalDec) Entonces AgregarError(20, Falso, nombre)
+			.Id = i
+			.Flags = .Flags Or finfImportado
+			.Usado = Falso
+		FinEval
+	Seguir
+	Si (LongMat(procTipos)+LongMat(procTiposLocales))>0 Entonces procTipos = procTipos + procTiposLocales
+	Borrar procTiposLocales
+	
+	varsLocales = LeerVars(arch)
+	Contar i = 0 a LongMat(varsLocales)-1
+		Eval varsLocales[i]
+			nombre = CadMayus(.Nombre)
+			Si EsIdentificador(nombre, idhGlobalDec) Entonces AgregarError(20, Falso, nombre)
+			.Flags = .Flags Or vinfImportado
+		FinEval
+	Seguir
+	Si (LongMat(vars)+LongMat(varsLocales))>0 Entonces vars = vars + varsLocales
+	Borrar varsLocales
+FinProc
+
+
+Privado:
+
+
+
+
+Proc Test()
+	libs=["C:\Archivos de programa\Pauscal\Editor\Lib"]
+	ImportarArchivoConDatos("WinCtrls.prp")
+FinProc
+
+

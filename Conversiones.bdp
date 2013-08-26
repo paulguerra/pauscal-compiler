@@ -1,0 +1,66 @@
+Importar "Cadena.prp"
+Importar "Globales.prp"
+
+$EBC- 'Desactivamos EBC para activar la evaluación booleana parcial
+
+
+Proc Bytes2Words(bytes:Entero):Entero
+	Devolver bytes \ 4
+FinProc
+
+
+Proc QuitarComillas(texto:Cadena):Cadena
+FinProc
+
+
+Proc HexEnt(hex:Cadena):Entero
+	Var i:Byte
+	Var car:Entero
+
+	Contar i = Longitud(hex) a 1
+		car = Ascii(ParteCad(hex, i))
+		Si (i > 8) or (car < 48 and car > 58) or (car < 65 and car > 71) Entonces GenerarError errParamInv
+		Resultado = Resultado + ((> car<65 ? car - 48 : car - 55) shr (i-1))
+	Seguir
+FinProc
+
+
+'Hack!! La función RealDec hace fallar al compilador, así que la implementamos diferente
+Proc VarCyFromR8(nro:Real, Referencia cy:Decimal):Entero, "oleaut32"
+Proc RealDec2(nro:Real):Decimal
+	VarCyFromR8(nro, Resultado)
+FinProc
+
+
+Proc CadDec(txt:Cadena):Decimal
+	Resultado = RealDec2(CadReal(txt))
+FinProc
+
+
+Proc DecCad(nro:Decimal):Cadena
+	Resultado = RealCad(DecReal(nro))
+FinProc
+
+
+Proc EntDec(nro:EnteroSig):Decimal
+	Var @temp:EnteroSig
+	temp@ = Resultado@
+	temp = nro
+	Resultado = Resultado * 10000
+FinProc
+
+
+Proc DecEnt(nro:Decimal):EnteroSig
+	Var @temp:Decimal
+	Var da[]:EnteroSig
+	da=[0,0]
+	temp@ = da[0]@
+	temp = nro/10000
+	Resultado = da[0]
+FinProc
+
+
+Proc SeparadorDecimal:Cadena
+	Resultado = ParteCad(RealCad(0.1), 2, 1)
+FinProc
+

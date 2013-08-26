@@ -1,0 +1,91 @@
+Importar "Globales.prp"
+Importar "Tipos.prp"
+
+$EBC- 'Desactivamos EBC para activar la evaluación booleana parcial
+
+
+'AddVarDeriv
+Proc AgregarDerivadas()
+	Var i,j:EnteroSig
+	
+	Contar i = 0 a LongMat(procs)-1
+		Eval procs[i]
+			Si ((.Flags And finfImportado) = 0) And (Longitud(.NombreDll) = 0) Entonces
+				AgregarDerivadasVar(.Params)
+				AgregarDerivadasVar(.LocalVars)
+			FinSi
+		FinEval
+	Seguir
+	Contar i = 0 a LongMat(clases)-1
+		Eval clases[i]
+			Si (.Flags And cinfImportada) = 0 Entonces
+				Contar j = 0 a LongMat(.Métodos)-1
+					Eval .Métodos[j]
+						AgregarDerivadasVar(.Params)
+						AgregarDerivadasVar(.LocalVars)
+					FinEval
+				Seguir
+			FinSi
+		FinEval
+	Seguir
+	AgregarDerivadasVar(vars)
+FinProc
+
+
+'AddDeriv
+Proc AgregarDerivadasVar(Referencia vars[]:cVar)
+	Var i:EnteroSig
+	
+	Contar i = 0 a LongMat(vars)-1
+		AgregarDerivadasTipo(vars[i].Tipo)
+	Seguir
+FinProc
+
+
+'AgregarDerivadaTipo
+Proc AgregarDerivadasTipo(tipo:Cadena)
+	Var idTipo:EnteroSig
+	
+	idTipo = AdmTipoBuscar(tipo)
+	Si idTipo = -1 Entonces Salir
+	Si idClaseActual <> -1 Entonces
+		Eval clases[idClaseActual].Métodos[idProcActual].Derivadas
+			.DerivadasTipo = .DerivadasTipo + [idTipo]
+		FinEval
+	SiNo
+		Eval procs[idProcActual].Derivadas
+			.DerivadasTipo = .DerivadasTipo + [idTipo]
+		FinEval
+	FinSi
+FinProc
+
+
+'AgregarDerivada
+Proc AgregarDerivadaDeProc(idProc:EnteroSig, idClase:EnteroSig, Opcional forzarHaciaPrincipal:Booleano)
+	Var nuevaDerivadaClase:cDerivClase
+	Var @derivada:cDeriv
+	
+	Si (Neg forzarHaciaPrincipal) And (idClaseActual <> -1) Entonces
+		Eval clases[idClaseActual].Métodos[idProcActual].Derivadas
+			Si idClase <> -1 Entonces
+				nuevaDerivadaClase.IdClase = idClase
+				nuevaDerivadaClase.IdMétodo = idProc
+				.DerivadasClase = .DerivadasClase + [nuevaDerivadaClase]
+			SiNo
+				.Derivadas = .Derivadas + [idProc]
+			FinSi
+		FinEval
+	SiNo
+		Si (Neg forzarHaciaPrincipal) And (idProcActual <> -1) Entonces derivada@ = procs[idProcActual]@; SiNo; derivada@ = derivadasCódigoPrincipal@
+		Eval derivada
+			Si idClase <> -1 Entonces
+				nuevaDerivadaClase.IdClase = idClase
+				nuevaDerivadaClase.IdMétodo = idProc
+				.DerivadasClase = .DerivadasClase + [nuevaDerivadaClase]
+			SiNo
+				.Derivadas = .Derivadas + [idProc]
+			FinSi
+		FinEval
+	FinSi
+FinProc
+

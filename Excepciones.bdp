@@ -1,0 +1,5 @@
+$EBC- 'Desactivamos EBC para activar la evaluación booleana parcial
+
+
+Proc ProtegerStackFrame(incluirDebug:Booleano)
+FinProc

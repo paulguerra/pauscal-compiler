@@ -1,0 +1,886 @@
+Importar "Globales.prp"
+Importar "Win.prp"
+
+$EBC- 'Desactivamos EBC para activar la evaluación booleana parcial
+
+
+'cImportado / cImportado[]:
+
+Proc EscribirImportados(archivo:pscArchivo, Referencia valor[]:cImportado, Opcional desfasaje:EnteroSig = 1)
+	Var descriptor:cVBMatrizUnidimensional
+	Var i:EnteroSig
+	Var vacio:cImportado
+	
+	descriptor = NuevoDescriptorVBMatrizUnidimensional(LongMat(valor)+desfasaje)
+	archivo.Escribir(descriptor@, Long(descriptor))
+	Contar i = 0 a descriptor.Longitud-1
+		Si i >= desfasaje Entonces EscribirImportado(archivo, valor[i-desfasaje]); SiNo; EscribirImportado(archivo, vacio)
+	Seguir
+FinProc
+
+Proc LeerImportados(archivo:pscArchivo, Opcional desfasaje:EnteroSig = 1):cImportado[]
+	Var descriptor:cVBMatrizUnidimensional
+	Var i:EnteroSig
+	
+	descriptor = LeerDescriptorMatriz(archivo)
+	Si descriptor.Longitud > 0 Entonces Redim Resultado, descriptor.Longitud-desfasaje
+	Contar i = 0 a descriptor.Longitud-1
+		Si i>=desfasaje Entonces Resultado[i-desfasaje] = LeerImportado(archivo); SiNo; LeerImportado(archivo)
+	Seguir
+FinProc
+
+Proc EscribirImportado(archivo:pscArchivo, Referencia valor:cImportado)
+	'Archivo
+	EscribirCadena(archivo, valor.Archivo)
+	
+	'Flags
+	EscribirWord(archivo, valor.Flags)
+FinProc
+
+Proc LeerImportado(archivo:pscArchivo):cImportado
+	'Archivo
+	Resultado.Archivo = LeerCadena(archivo)
+	
+	'Flags
+	Resultado.Flags = LeerWord(archivo)
+FinProc
+
+
+'cClase / cClase[]:
+
+Proc EscribirClases(archivo:pscArchivo, Referencia valor[]:cClase, Opcional desfasaje:EnteroSig = 1)
+	Var descriptor:cVBMatrizUnidimensional
+	Var i:EnteroSig
+	Var vacio:cClase
+	
+	descriptor = NuevoDescriptorVBMatrizUnidimensional(LongMat(valor)+desfasaje)
+	archivo.Escribir(descriptor@, Long(descriptor))
+	Contar i = 0 a descriptor.Longitud-1
+		Si i >= desfasaje Entonces EscribirClase(archivo, valor[i-desfasaje]); SiNo; EscribirClase(archivo, vacio)
+	Seguir
+FinProc
+
+Proc LeerClases(archivo:pscArchivo, Opcional desfasaje:EnteroSig = 1):cClase[]
+	Var descriptor:cVBMatrizUnidimensional
+	Var i:EnteroSig
+	
+	descriptor = LeerDescriptorMatriz(archivo)
+	Si descriptor.Longitud > 0 Entonces Redim Resultado, descriptor.Longitud-desfasaje
+	Contar i = 0 a descriptor.Longitud-1
+		Si i>=desfasaje Entonces Resultado[i-desfasaje] = LeerClase(archivo); SiNo; LeerClase(archivo)
+	Seguir
+FinProc
+
+Proc EscribirClase(archivo:pscArchivo, Referencia valor:cClase)
+	'Nombre
+	EscribirCadena(archivo, valor.Nombre)
+	
+	'Props
+	EscribirProps(archivo, valor.Props)
+	
+	'Methods
+	EscribirFuncs(archivo, valor.Métodos)
+	
+	'Vars
+	EscribirVars(archivo, valor.Vars)
+	
+	'BytesRequired
+	EscribirEntero(archivo, valor.Tamaño)
+	
+	'InitCount
+	EscribirWord(archivo, LongMat(valor.Constructores))
+	
+	'InitFunc
+	EscribirEnteros(archivo, valor.Constructores)
+	
+	'FinCount
+	EscribirWord(archivo, LongMat(valor.Destructores))
+	
+	'FinFunc
+	EscribirEnteros(archivo, valor.Destructores)
+	
+	'Usado
+	EscribirBooleano(archivo, valor.Usado)
+	
+	'Pos(1)
+	EscribirEntero(archivo, valor.Posición1)
+	EscribirEntero(archivo, valor.Posición2)
+	
+	'HerederoId
+	EscribirEntero(archivo, valor.IdHeredero+1) 'El 0 no se usa
+	
+	'HerederoStr
+	EscribirCadena(archivo, valor.NombreHeredero)
+	
+	'Flags
+	EscribirWord(archivo, valor.Flags)
+FinProc
+
+Proc LeerClase(archivo:pscArchivo):cClase
+	Var descriptorC:cVBCadena
+	
+	'Nombre
+	Resultado.Nombre = LeerCadena(archivo)
+	
+	'Props
+	Resultado.Props = LeerProps(archivo)
+	
+	'Methods
+	Resultado.Métodos = LeerFuncs(archivo)
+	
+	'Vars
+	Resultado.Vars = LeerVars(archivo)
+	
+	'BytesRequired
+	Resultado.Tamaño = LeerEntero(archivo)
+	
+	'InitCount
+	archivo.Posición = archivo.Posición + 2
+	
+	'InitFunc
+	Resultado.Constructores = LeerEnteros(archivo)
+	
+	'FinCount
+	archivo.Posición = archivo.Posición + 2
+	
+	'FinFunc
+	Resultado.Destructores = LeerEnteros(archivo)
+	
+	'Usado
+	Resultado.Usado = LeerBooleano(archivo)
+	
+	'Pos(1)
+	Resultado.Posición1 = LeerEntero(archivo)
+	Resultado.Posición2 = LeerEntero(archivo)
+	
+	'HerederoId
+	Resultado.IdHeredero = LeerEnteroSig(archivo)-1 'El 0 no se usa
+	
+	'HerederoStr
+	Resultado.NombreHeredero = LeerCadena(archivo)
+	
+	'Flags
+	Resultado.Flags = LeerWord(archivo)
+FinProc
+
+'cProp / cProp[]:
+
+Proc EscribirProps(archivo:pscArchivo, Referencia valor[]:cProp, Opcional desfasaje:EnteroSig = 1)
+	Var descriptor:cVBMatrizUnidimensional
+	Var i:EnteroSig
+	Var vacio:cProp
+	
+	descriptor = NuevoDescriptorVBMatrizUnidimensional(LongMat(valor)+desfasaje)
+	archivo.Escribir(descriptor@, Long(descriptor))
+	Contar i = 0 a descriptor.Longitud-1
+		Si i >= desfasaje Entonces EscribirProp(archivo, valor[i-desfasaje]); SiNo; EscribirProp(archivo, vacio)
+	Seguir
+FinProc
+
+Proc LeerProps(archivo:pscArchivo, Opcional desfasaje:EnteroSig = 1):cProp[]
+	Var descriptor:cVBMatrizUnidimensional
+	Var i:EnteroSig
+	
+	descriptor = LeerDescriptorMatriz(archivo)
+	Si descriptor.Longitud > 0 Entonces Redim Resultado, descriptor.Longitud-desfasaje
+	Contar i = 0 a descriptor.Longitud-1
+		Si i>=desfasaje Entonces Resultado[i-desfasaje] = LeerProp(archivo); SiNo; LeerProp(archivo)
+	Seguir
+FinProc
+
+Proc EscribirProp(archivo:pscArchivo, Referencia valor:cProp)
+	'Nombre
+	EscribirCadena(archivo, valor.Nombre)
+	
+	'Tipo
+	EscribirCadena(archivo, valor.Tipo)
+
+	'HasEsc
+	EscribirBooleano(archivo, valor.Escritura)
+	
+	'EscFunc
+	EscribirEntero(archivo, valor.PunteroEscritura)
+	
+	'HasLec
+	EscribirBooleano(archivo, valor.Lectura)
+	
+	'LecFunc
+	EscribirEntero(archivo, valor.PunteroLectura)
+	
+	'Flags
+	EscribirWord(archivo, valor.Flags)
+FinProc
+
+Proc LeerProp(archivo:pscArchivo):cProp
+	'Nombre
+	Resultado.Nombre = LeerCadena(archivo)
+	
+	'Tipo
+	Resultado.Tipo = LeerCadena(archivo)
+	
+	'HasEsc
+	Resultado.Escritura = LeerBooleano(archivo)
+	
+	'EscFunc
+	Resultado.PunteroEscritura = LeerEntero(archivo)
+	
+	'HasLec
+	Resultado.Lectura = LeerBooleano(archivo)
+	
+	'LecFunc
+	Resultado.PunteroLectura = LeerEntero(archivo)
+	
+	'Flags
+	Resultado.Flags = LeerWord(archivo)
+FinProc
+
+'cFunc / cFunc[]
+
+Proc EscribirFuncs(archivo:pscArchivo, Referencia valor[]:cFunc, Opcional desfasaje:EnteroSig = 1)
+	Var descriptor:cVBMatrizUnidimensional
+	Var i:EnteroSig
+	Var vacio:cFunc
+	
+	descriptor = NuevoDescriptorVBMatrizUnidimensional(LongMat(valor)+desfasaje)
+	archivo.Escribir(descriptor@, Long(descriptor))
+	Contar i = 0 a descriptor.Longitud-1
+		Si i >= desfasaje Entonces EscribirFunc(archivo, valor[i-desfasaje]); SiNo; EscribirFunc(archivo, vacio)
+	Seguir
+FinProc
+
+Proc LeerFuncs(archivo:pscArchivo, Opcional desfasaje:EnteroSig = 1):cFunc[]
+	Var descriptor:cVBMatrizUnidimensional
+	Var i:EnteroSig
+	
+	descriptor = LeerDescriptorMatriz(archivo)
+	Si descriptor.Longitud > 0 Entonces Redim Resultado, descriptor.Longitud-desfasaje
+	Contar i = 0 a descriptor.Longitud-1
+		Si i>=desfasaje Entonces Resultado[i-desfasaje] = LeerFunc(archivo); SiNo; LeerFunc(archivo)
+	Seguir
+FinProc
+
+Proc EscribirFunc(archivo:pscArchivo, Referencia valor:cFunc)
+	'Id
+	EscribirEntero(archivo, valor.Id)
+	
+	'Nombre
+	EscribirCadena(archivo, valor.Nombre)
+	
+	'Tipo
+	EscribirCadena(archivo, valor.Tipo)
+
+	'Param
+	EscribirVars(archivo, valor.Params)
+	
+	'ExtName
+	EscribirCadena(archivo, valor.NombreExterno)
+	
+	'DllName
+	EscribirCadena(archivo, valor.NombreDll)
+
+	'Derivadas
+	EscribirDeriv(archivo, valor.Derivadas)
+	
+	'Posic(1)
+	EscribirEntero(archivo, valor.Posición1)
+	EscribirEntero(archivo, valor.Posición2)
+	
+	'OptionalStart
+	EscribirEntero(archivo, valor.ComienzoOpcional)
+	
+	'Flags
+	EscribirWord(archivo, valor.Flags)
+	
+	'Exportado
+	EscribirCadena(archivo, valor.Exportado)
+	
+	'LocalVars
+	EscribirVars(archivo, valor.LocalVars)
+	
+	'Usado
+	EscribirBooleano(archivo, valor.Usado)
+FinProc
+
+Proc LeerFunc(archivo:pscArchivo):cFunc
+	'Id
+	Resultado.Id = LeerEntero(archivo)
+	
+	'Nombre
+	Resultado.Nombre = LeerCadena(archivo)
+	
+	'Tipo
+	Resultado.Tipo = LeerCadena(archivo)
+	
+	'Param
+	Resultado.Params = LeerVars(archivo)
+	
+	'ExtName
+	Resultado.NombreExterno = LeerCadena(archivo)
+	
+	'DllName
+	Resultado.NombreDll = LeerCadena(archivo)
+	
+	'Derivadas
+	Resultado.Derivadas = LeerDeriv(archivo)
+	
+	'Posic(1)
+	Resultado.Posición1 = LeerEntero(archivo)
+	Resultado.Posición2 = LeerEntero(archivo)
+	
+	'OptionalStart
+	Resultado.ComienzoOpcional = LeerEntero(archivo)
+	
+	'Flags
+	Resultado.Flags = LeerWord(archivo)
+	
+	'Exportado
+	Resultado.Exportado = LeerCadena(archivo)
+	
+	'LocalVars
+	Resultado.LocalVars = LeerVars(archivo)
+	
+	'Usado
+	Resultado.Usado = LeerBooleano(archivo)
+FinProc
+
+'cVar / cVar[]
+
+Proc EscribirVars(archivo:pscArchivo, Referencia valor[]:cVar, Opcional desfasaje:EnteroSig = 1)
+	Var descriptor:cVBMatrizUnidimensional
+	Var i:EnteroSig
+	Var vacio:cVar
+	
+	descriptor = NuevoDescriptorVBMatrizUnidimensional(LongMat(valor)+desfasaje)
+	archivo.Escribir(descriptor@, Long(descriptor))
+	Contar i = 0 a descriptor.Longitud-1
+		Si i >= desfasaje Entonces EscribirVar(archivo, valor[i-desfasaje]); SiNo; EscribirVar(archivo, vacio)
+	Seguir
+FinProc
+
+Proc LeerVars(archivo:pscArchivo):cVar[]
+	Var descriptor:cVBMatrizUnidimensional
+	Var i:EnteroSig
+	
+	descriptor = LeerDescriptorMatriz(archivo)
+	Si descriptor.Longitud > 0 Entonces Redim Resultado, descriptor.Longitud-1
+	Contar i = 0 a descriptor.Longitud-1
+		Si i > 0 Entonces Resultado[i-1] = LeerVar(archivo); SiNo; LeerVar(archivo)
+	Seguir
+FinProc
+
+Proc EscribirVar(archivo:pscArchivo, Referencia valor:cVar)
+	'Nombre
+	EscribirCadena(archivo, valor.Nombre)
+	
+	'Tipo
+	EscribirCadena(archivo, valor.Tipo)
+
+	'Pointer
+	EscribirBooleano(archivo, valor.Puntero)
+	
+	'IsParam
+	EscribirBooleano(archivo, valor.EsParam)
+	
+	'HiBound
+	EscribirEnteroSig(archivo, valor.Cantidad)
+
+	'Flags
+	EscribirWord(archivo, valor.Flags)
+	
+	'Extra
+	EscribirCadena(archivo, valor.Extra)	
+FinProc
+
+Proc LeerVar(archivo:pscArchivo):cVar
+	'Nombre
+	Resultado.Nombre = LeerCadena(archivo)
+	
+	'Tipo
+	Resultado.Tipo = LeerCadena(archivo)
+	
+	'Pointer
+	Resultado.Puntero = LeerBooleano(archivo)
+	
+	'IsParam
+	Resultado.EsParam = LeerBooleano(archivo)
+	
+	'HiBound
+	Resultado.Cantidad = LeerEnteroSig(archivo)
+	
+	'Flags
+	Resultado.Flags = LeerWord(archivo)
+	
+	'Extra
+	Resultado.Extra = LeerCadena(archivo)
+FinProc
+
+'cDeriv / cDeriv[]
+
+Proc EscribirDeriv(archivo:pscArchivo, Referencia valor:cDeriv)
+	'Derivadas
+	EscribirEnteros(archivo, valor.Derivadas)
+	
+	'DerivadasClass
+	EscribirDerivClases(archivo, valor.DerivadasClase)
+	
+	'DerivadasTipo
+	EscribirEnteros(archivo, valor.DerivadasTipo)
+FinProc
+
+Proc LeerDeriv(archivo:pscArchivo):cDeriv
+	'Derivadas
+	Resultado.Derivadas = LeerEnteros(archivo)
+	
+	'DerivadasClass
+	Resultado.DerivadasClase = LeerDerivClases(archivo)
+	
+	'DerivadasTipo
+	Resultado.DerivadasTipo = LeerEnteros(archivo)
+FinProc
+
+'cDerivClase / cDerivClase[]
+
+Proc EscribirDerivClases(archivo:pscArchivo, Referencia valor[]:cDerivClase, Opcional desfasaje:EnteroSig = 1)
+	Var descriptor:cVBMatrizUnidimensional
+	Var i:EnteroSig
+	Var vacio:cDerivClase
+	
+	descriptor = NuevoDescriptorVBMatrizUnidimensional(LongMat(valor)+desfasaje)
+	archivo.Escribir(descriptor@, Long(descriptor))
+	Contar i = 0 a descriptor.Longitud-1
+		Si i >= desfasaje Entonces EscribirDerivClase(archivo, valor[i-desfasaje]); SiNo; EscribirDerivClase(archivo, vacio)
+	Seguir
+FinProc
+
+Proc LeerDerivClases(archivo:pscArchivo, Opcional desfasaje:EnteroSig = 1):cDerivClase[]
+	Var descriptor:cVBMatrizUnidimensional
+	Var i:EnteroSig
+	
+	descriptor = LeerDescriptorMatriz(archivo)
+	Si descriptor.Longitud > 0 Entonces Redim Resultado, descriptor.Longitud-desfasaje
+	Contar i = 0 a descriptor.Longitud-1
+		Si i>=desfasaje Entonces Resultado[i-desfasaje] = LeerDerivClase(archivo); SiNo; LeerDerivClase(archivo)
+	Seguir
+FinProc
+
+Proc EscribirDerivClase(archivo:pscArchivo, Referencia valor:cDerivClase)
+	'ClaseId
+	EscribirEntero(archivo, valor.IdClase)
+	
+	'MethodId
+	EscribirEntero(archivo, valor.IdMétodo)
+FinProc
+
+Proc LeerDerivClase(archivo:pscArchivo):cDerivClase
+	'ClaseId
+	Resultado.IdClase = LeerEntero(archivo)
+	
+	'MethodId
+	Resultado.IdMétodo = LeerEntero(archivo)
+FinProc
+
+'cTipo / cTipo[]
+
+Proc EscribirTipos(archivo:pscArchivo, Referencia valor[]:cTipo, Opcional desfasaje:EnteroSig = 1)
+	Var descriptor:cVBMatrizUnidimensional
+	Var i:EnteroSig
+	Var vacio:cTipo
+	
+	descriptor = NuevoDescriptorVBMatrizUnidimensional(LongMat(valor)+desfasaje)
+	archivo.Escribir(descriptor@, Long(descriptor))
+	Contar i = 0 a descriptor.Longitud-1
+		Si i >= desfasaje Entonces EscribirTipo(archivo, valor[i-desfasaje]); SiNo; EscribirTipo(archivo, vacio)
+	Seguir
+FinProc
+
+Proc LeerTipos(archivo:pscArchivo, Opcional desfasaje:EnteroSig = 1):cTipo[]
+	Var descriptor:cVBMatrizUnidimensional
+	Var i:EnteroSig
+	
+	descriptor = LeerDescriptorMatriz(archivo)
+	Si descriptor.Longitud > 0 Entonces Redim Resultado, descriptor.Longitud-desfasaje
+	Contar i = 0 a descriptor.Longitud-1
+		Si i>=desfasaje Entonces Resultado[i-desfasaje] = LeerTipo(archivo); SiNo; LeerTipo(archivo)
+	Seguir
+FinProc
+
+Proc EscribirTipo(archivo:pscArchivo, Referencia valor:cTipo)
+	'Nombre
+	EscribirCadena(archivo, valor.Nombre)
+	
+	'Comp
+	EscribirComps(archivo, valor.Comps)
+	
+	'Tamaño
+	EscribirEntero(archivo, valor.Tamaño)
+	
+	'Flags
+	EscribirWord(archivo, valor.Flags)
+FinProc
+
+Proc LeerTipo(archivo:pscArchivo):cTipo
+	'Nombre
+	Resultado.Nombre = LeerCadena(archivo)
+	
+	'Comp
+	Resultado.Comps = LeerComps(archivo)
+	
+	'Tamaño
+	Resultado.Tamaño = LeerEntero(archivo)
+	
+	'Flags
+	Resultado.Flags = LeerWord(archivo)
+FinProc
+
+'cCompInfo / cCompInfo[]
+
+Proc EscribirComps(archivo:pscArchivo, Referencia valor[]:cCompInfo, Opcional desfasaje:EnteroSig = 1)
+	Var descriptor:cVBMatrizUnidimensional
+	Var i:EnteroSig
+	Var vacio:cCompInfo
+	
+	descriptor = NuevoDescriptorVBMatrizUnidimensional(LongMat(valor)+desfasaje)
+	archivo.Escribir(descriptor@, Long(descriptor))
+	Contar i = 0 a descriptor.Longitud-1
+		Si i >= desfasaje Entonces EscribirComp(archivo, valor[i-desfasaje]); SiNo; EscribirComp(archivo, vacio)
+	Seguir
+FinProc
+
+Proc LeerComps(archivo:pscArchivo, Opcional desfasaje:EnteroSig = 1):cCompInfo[]
+	Var descriptor:cVBMatrizUnidimensional
+	Var i:EnteroSig
+	
+	descriptor = LeerDescriptorMatriz(archivo)
+	Si descriptor.Longitud > 0 Entonces Redim Resultado, descriptor.Longitud-desfasaje
+	Contar i = 0 a descriptor.Longitud-1
+		Si i>=desfasaje Entonces Resultado[i-desfasaje] = LeerComp(archivo); SiNo; LeerComp(archivo)
+	Seguir
+FinProc
+
+Proc EscribirComp(archivo:pscArchivo, Referencia valor:cCompInfo)
+	'Nombre
+	EscribirCadena(archivo, valor.Nombre)
+	
+	'Tipo
+	EscribirCadena(archivo, valor.Tipo)
+	
+	'Pointer
+	EscribirBooleano(archivo, valor.Puntero)
+	
+	'HiBound
+	EscribirEnteroSig(archivo, valor.Cantidad)
+	
+	'Tamaño
+	EscribirEntero(archivo, valor.Tamaño)
+FinProc
+
+Proc LeerComp(archivo:pscArchivo):cCompInfo
+	'Nombre
+	Resultado.Nombre = LeerCadena(archivo)
+	
+	'Tipo
+	Resultado.Tipo = LeerCadena(archivo)
+	
+	'Pointer
+	Resultado.Puntero = LeerBooleano(archivo)
+	
+	'HiBound
+	Resultado.Cantidad = LeerEnteroSig(archivo)
+	
+	'Tamaño
+	Resultado.Tamaño = LeerEntero(archivo)
+FinProc
+
+'cConst / cConst[]
+
+Proc EscribirConsts(archivo:pscArchivo, Referencia valor[]:cConst, Opcional desfasaje:EnteroSig = 1)
+	Var descriptor:cVBMatrizUnidimensional
+	Var i:EnteroSig
+	Var vacio:cConst
+	
+	descriptor = NuevoDescriptorVBMatrizUnidimensional(LongMat(valor)+desfasaje)
+	archivo.Escribir(descriptor@, Long(descriptor))
+	Contar i = 0 a descriptor.Longitud-1
+		Si i >= desfasaje Entonces EscribirConst(archivo, valor[i-desfasaje]); SiNo; EscribirConst(archivo, vacio)
+	Seguir
+FinProc
+
+Proc LeerConsts(archivo:pscArchivo, Opcional desfasaje:EnteroSig = 1):cConst[]
+	Var descriptor:cVBMatrizUnidimensional
+	Var i:EnteroSig
+	
+	descriptor = LeerDescriptorMatriz(archivo)
+	Si descriptor.Longitud > 0 Entonces Redim Resultado, descriptor.Longitud-desfasaje
+	Contar i = 0 a descriptor.Longitud-1
+		Si i>=desfasaje Entonces Resultado[i-desfasaje] = LeerConst(archivo); SiNo; LeerConst(archivo)
+	Seguir
+FinProc
+
+Proc EscribirConst(archivo:pscArchivo, Referencia valor:cConst)
+	'Nombre
+	EscribirCadena(archivo, valor.Nombre)
+	
+	'Rep
+	EscribirCadenas(archivo, valor.Rep, 0)
+	
+	'Flags
+	EscribirWord(archivo, valor.Flags)
+FinProc
+
+Proc LeerConst(archivo:pscArchivo):cConst
+	'Nombre
+	Resultado.Nombre = LeerCadena(archivo)
+	
+	'Rep
+	Resultado.Rep = LeerCadenas(archivo, 0)
+	
+	'Flags
+	Resultado.Flags = LeerWord(archivo)
+FinProc
+
+'cInfoLinea / cInfoLinea[]
+
+Proc EscribirInfoLineas(archivo:pscArchivo, Referencia valor[]:cInfoLinea, Opcional desfasaje:EnteroSig = 1)
+	Var descriptor:cVBMatrizUnidimensional
+	Var i:EnteroSig
+	Var vacio:cInfoLinea
+	
+	descriptor = NuevoDescriptorVBMatrizUnidimensional(LongMat(valor)+desfasaje)
+	archivo.Escribir(descriptor@, Long(descriptor))
+	Contar i = 0 a descriptor.Longitud-1
+		Si i >= desfasaje Entonces EscribirInfoLinea(archivo, valor[i-desfasaje]); SiNo; EscribirInfoLinea(archivo, vacio)
+	Seguir
+FinProc
+
+Proc LeerInfoLineas(archivo:pscArchivo, Opcional desfasaje:EnteroSig = 1):cInfoLinea[]
+	Var descriptor:cVBMatrizUnidimensional
+	Var i:EnteroSig
+	
+	descriptor = LeerDescriptorMatriz(archivo)
+	Si descriptor.Longitud > 0 Entonces Redim Resultado, descriptor.Longitud-desfasaje
+	Contar i = 0 a descriptor.Longitud-1
+		Si i>=desfasaje Entonces Resultado[i-desfasaje] = LeerInfoLinea(archivo); SiNo; LeerInfoLinea(archivo)
+	Seguir
+FinProc
+
+Proc EscribirInfoLinea(archivo:pscArchivo, Referencia valor:cInfoLinea)
+	'HayCodigo
+	EscribirBooleano(archivo, valor.HayCodigo)
+	
+	'ProcId
+	EscribirEntero(archivo, valor.IdProc)
+	
+	'ClaseId
+	EscribirEntero(archivo, valor.IdClase)
+	
+	'ControlEstrucs
+	EscribirCadena(archivo, valor.EstrucControl)
+FinProc
+
+Proc LeerInfoLinea(archivo:pscArchivo):cInfoLinea
+	'HayCodigo
+	Resultado.HayCodigo = LeerBooleano(archivo)
+	
+	'ProcId
+	Resultado.IdProc = LeerEntero(archivo)
+	
+	'ClaseId
+	Resultado.IdClase = LeerEntero(archivo)
+	
+	'ControlEstrucs
+	Resultado.EstrucControl = LeerCadena(archivo)
+FinProc
+
+'Primitivos:
+
+Proc EscribirCadena(archivo:pscArchivo, valor:Cadena)
+	Var descriptor:cVBCadena
+	
+	descriptor.Longitud = Longitud(valor)
+	archivo.Escribir(descriptor@, Long(descriptor))
+	archivo.EscribirCad(valor)
+FinProc
+
+Proc LeerCadena(archivo:pscArchivo):Cadena
+	Var descriptor:cVBCadena
+	
+	archivo.Leer(descriptor@, Long(descriptor))
+	Resultado = archivo.LeerCad(descriptor.Longitud)
+FinProc
+
+Proc EscribirCadenas(archivo:pscArchivo, Referencia valor[]:Cadena, Opcional desfasaje:EnteroSig = 1)
+	Var descriptor:cVBMatrizUnidimensional
+	Var i:EnteroSig
+	Var vacio:Cadena
+	
+	descriptor = NuevoDescriptorVBMatrizUnidimensional(LongMat(valor)+desfasaje)
+	archivo.Escribir(descriptor@, Long(descriptor))
+	Contar i = 0 a descriptor.Longitud-1
+		EscribirCadena(archivo, > i>=desfasaje ? valor[i-desfasaje] : vacio)
+	Seguir
+FinProc
+
+Proc LeerCadenas(archivo:pscArchivo, Opcional desfasaje:EnteroSig = 1):Cadena[]
+	Var descriptor:cVBMatrizUnidimensional
+	Var i:EnteroSig
+	
+	descriptor = LeerDescriptorMatriz(archivo)
+	Si descriptor.Longitud > 0 Entonces Redim Resultado, descriptor.Longitud-desfasaje
+	Contar i = 0 a descriptor.Longitud-1
+		Si i>=desfasaje Entonces Resultado[i-desfasaje] = LeerCadena(archivo); SiNo; LeerCadena(archivo)
+	Seguir
+FinProc
+
+Proc EscribirBooleano(archivo:pscArchivo, valor:Booleano)
+	EscribirWord(archivo, > valor ? &FFFF : 0)
+FinProc
+
+Proc LeerBooleano(archivo:pscArchivo):Booleano
+	Resultado = > LeerWord(archivo) <> 0 ? Verd : Falso
+FinProc
+
+Proc EscribirEntero(archivo:pscArchivo, valor:Entero)
+	archivo.Escribir(valor@, Long(valor))
+FinProc
+
+Proc LeerEntero(archivo:pscArchivo):Entero
+	archivo.Leer(Resultado@, Long(Resultado))
+FinProc
+
+Proc EscribirEnteroSig(archivo:pscArchivo, valor:EnteroSig)
+	archivo.Escribir(valor@, Long(valor))
+FinProc
+
+Proc LeerEnteroSig(archivo:pscArchivo):EnteroSig
+	archivo.Leer(Resultado@, Long(Resultado))
+FinProc
+
+Proc EscribirEnteros(archivo:pscArchivo, Referencia valor[]:Entero, Opcional desfasaje:EnteroSig = 1)
+	Var descriptor:cVBMatrizUnidimensional
+	Var i:EnteroSig
+	Var vacio:Entero
+	
+	descriptor = NuevoDescriptorVBMatrizUnidimensional(LongMat(valor)+desfasaje)
+	archivo.Escribir(descriptor@, Long(descriptor))
+	Contar i = 0 a descriptor.Longitud-1
+		EscribirEntero(archivo, > i>=desfasaje ? valor[i-desfasaje] : vacio)
+	Seguir
+FinProc
+
+Proc LeerEnteros(archivo:pscArchivo, Opcional desfasaje:EnteroSig = 1):Entero[]
+	Var descriptor:cVBMatrizUnidimensional
+	Var i:EnteroSig
+	
+	descriptor = LeerDescriptorMatriz(archivo)
+	Si descriptor.Longitud > 0 Entonces Redim Resultado, descriptor.Longitud-desfasaje
+	Contar i = 0 a descriptor.Longitud-1
+		Si i>=desfasaje Entonces Resultado[i-desfasaje] = LeerEntero(archivo); SiNo; LeerEntero(archivo)
+	Seguir
+FinProc
+
+Proc EscribirWord(archivo:pscArchivo, valor:Word)
+	archivo.Escribir(valor@, Long(valor))
+FinProc
+
+Proc LeerWord(archivo:pscArchivo):Word
+	archivo.Leer(Resultado@, Long(Resultado))
+FinProc
+
+Proc EscribirBytes(archivo:pscArchivo, valor[]:Byte)
+	Var descriptor:cVBMatrizUnidimensional
+	
+	descriptor = NuevoDescriptorVBMatrizUnidimensional(LongMat(valor))
+	archivo.Escribir(descriptor@, Long(descriptor))
+	Si descriptor.Longitud>0 Entonces archivo.Escribir(valor[0]@, descriptor.Longitud)
+FinProc
+
+Proc LeerBytes(archivo:pscArchivo):Byte[]
+	Var descriptor:cVBMatrizUnidimensional
+	
+	descriptor = LeerDescriptorMatriz(archivo)
+	Redim Resultado, descriptor.Longitud
+	Si descriptor.Longitud>0 Entonces archivo.Leer(Resultado[0]@, descriptor.Longitud)
+FinProc
+
+
+Privado:
+
+Proc LeerDescriptorMatriz(archivo:pscArchivo):cVBMatrizUnidimensional
+	Var i:EnteroSig
+	
+	Resultado.Dimensiones = LeerWord(archivo)
+	Contar i = 0 a Resultado.Dimensiones-1
+		Si i = 0 Entonces
+			archivo.Leer(Resultado.Longitud@, 8)
+		SiNo
+			archivo.Posición = archivo.Posición + 8
+		FinSi
+	Seguir
+FinProc
+
+Estruc cVBMatrizUnidimensional, _
+	Dimensiones:Word, _
+	Longitud:EnteroSig, _
+	Lbound:EnteroSig
+
+Estruc cVBCadena, _
+	Longitud:Word
+
+Proc NuevoDescriptorVBMatrizUnidimensional(longitud:EnteroSig):cVBMatrizUnidimensional
+	Resultado.Dimensiones = 1
+	Resultado.Longitud = longitud
+	Resultado.Lbound = 0
+FinProc
+
+
+
+Proc Test_VBIO
+	Var j:pscArchivo
+	Crear j
+	j.Nombre="C:\Archivos de programa\Pauscal\Editor\Compilador\Globales.prp"
+	j.Abrir
+	LeerImportados(j)
+	LeerEntero(j)
+	LeerClases(j)
+	LeerTipos(j)
+	LeerConsts(j)
+FinProc
+
+Proc Test_VBIO_2
+	Var j,k:pscArchivo
+	Var i[]:cImportado, c[]:cClase, e:Entero, t[]:cTipo, co[]:cConst, obj[]:byte, f[]:cFunc, v[]:cVar
+	
+	Crear j,k
+	j.Nombre="C:\Archivos de programa\Pauscal\Editor\Compilador\Globales.prp"
+	k.Nombre="C:\Archivos de programa\Pauscal\Editor\Compilador\Da.prp"
+	j.Abrir
+	k.CrearNuevo(Verd)
+	i=LeerImportados(j,0)
+	EscribirImportados(k,i,0)
+	e=LeerEntero(j)
+	EscribirEntero(k,e)
+	c=LeerClases(j)
+	EscribirClases(k,c)
+	t=LeerTipos(j)
+	EscribirTipos(k,t)
+	co=LeerConsts(j)
+	EscribirConsts(k,co)
+	f=LeerFuncs(j)
+	EscribirFuncs(k,f)
+	f=LeerFuncs(j)
+	EscribirFuncs(k,f)
+	v=LeerVars(j)
+	EscribirVars(k,v)
+	obj=LeerBytes(j)
+	EscribirBytes(k,obj)
+	Destruir j,k
+	Crear j
+	j.Nombre="C:\Archivos de programa\Pauscal\Editor\Compilador\Da.prp"
+	j.Abrir
+	LeerImportados(j)
+	LeerEntero(j)
+	LeerClases(j)
+	LeerTipos(j)
+	LeerConsts(j)
+FinProc
+

@@ -1,0 +1,155 @@
+Importar "Globales.prp"
+Importar "Errores.prp"
+
+$EBC- 'Desactivamos EBC para activar la evaluación booleana parcial
+
+
+Proc MedirEnBytes(tipo:Cadena, Opcional puntero:Booleano, Opcional cantidad:EnteroSig):Entero
+	Si puntero Or (cantidad = -1) Entonces Devolver 4
+	Seleccionar tipo
+		Caso pCadena, pEntero, pEnteroSig
+			Resultado = 4
+		Caso pWord, pWordSig
+			Resultado = 2
+		Caso pByte, pByteSig, pBooleano
+			Resultado = 1
+		Caso pReal, pDecimal
+			Resultado = 8
+		Caso Otro
+			Seleccionar EsTipo(tipo)
+				Caso 4, 3
+					Resultado = 4
+				Caso 2
+					Resultado = tipos[AdmTipoBuscar(tipo)].Tamaño
+			FinSeleccionar
+	FinSeleccionar
+	Si cantidad <> 0 Entonces Resultado = Resultado * cantidad
+FinProc
+
+
+Proc ReMedirTamaño(idTipo:Entero):Entero
+	Var i:EnteroSig
+	
+	Contar i = 0 a LongMat(tipos[idTipo].Comps)-1
+		Eval tipos[idTipo].Comps[i]
+			Si .Tamaño = 0 Entonces AgregarError(74, Falso, CadMayus(tipos[idTipo].Nombre))
+			Si (Neg .Puntero) And (.Cantidad <> -1) And (EsTipo(.Tipo) = 2) Entonces .Tamaño = ReMedirTamaño(AdmTipoBuscar(.Tipo))
+			Resultado = Resultado + .Tamaño
+		FinEval
+	Seguir
+FinProc
+
+
+'TipoAdm 0
+Proc AdmTipoNuevo(nombre:Cadena)
+	Var tipo:cTipo
+	
+	tipo.Nombre = nombre
+	tipos = tipos + [tipo]
+FinProc
+
+'TipoAdm 2
+Proc AdmTipoBuscar(nombre:Cadena):EnteroSig
+	Var i:EnteroSig
+	
+	nombre = CadMinus(nombre)
+	Contar i = 0 a LongMat(tipos)-1
+		Si tipos[i].Nombre = nombre Entonces Devolver i
+	Seguir
+	Devolver -1
+FinProc
+
+'ClaseAdm 2
+Proc AdmClaseBuscar(nombre:Cadena):EnteroSig
+	Var i:EnteroSig
+	
+	nombre = CadMinus(nombre)
+	Contar i = 0 a LongMat(clases)-1
+		Si clases[i].Nombre = nombre Entonces Devolver i
+	Seguir
+	Devolver -1
+FinProc
+
+'ClaseAdm 3
+Proc AdmClaseAgregarVariables(idClase:EnteroSig, Referencia vars[]:cVar):EnteroSig
+	Eval clases[idClase]
+		.Vars = .Vars + vars
+	FinEval
+FinProc
+
+'ClaseAdm 5
+Proc AdmClaseOffset(idClase:EnteroSig, nombre:Cadena):EnteroSig
+	Var i:EnteroSig
+	
+	nombre = CadMinus(nombre)
+	Si idClaseActual <> -1 Entonces
+		Resultado = longitudBásicaClase
+		Eval clases[idClase]
+			Contar i = 0 a LongMat(.Vars)-1
+				Eval .Vars[i]
+					Si .Nombre = nombre Entonces Salir
+					Resultado = Resultado + MedirEnBytes(.Tipo, .Puntero, .Cantidad)
+				FinEval
+			Seguir
+		FinEval
+	FinSi
+	Resultado = -1
+FinProc
+
+'ProcTipoAdm
+Proc AdmProcTipoBuscar(nombre:Cadena):EnteroSig
+	Var i:EnteroSig
+	
+	nombre = CadMinus(nombre)
+	Contar i = 0 a LongMat(procTipos)-1
+		Si procTipos[i].Nombre = nombre Entonces Devolver i
+	Seguir
+	Devolver -1
+FinProc
+
+
+Proc EsTipo(tipo:Cadena):EnteroSig
+	Si Longitud(tipo) = 0 Entonces Salir
+	Seleccionar CadMinus(tipo)
+		Caso pEntero, pEnteroSig, pReal, pByte, pByteSig, pWord, pWordSig, pBooleano, pCadena, pDecimal
+			Devolver 1
+		Caso Otro
+			Si AdmTipoBuscar(tipo) <> -1 Entonces Devolver 2
+			Si AdmClaseBuscar(tipo) <> -1 Entonces Devolver 3
+			Si AdmProcTipoBuscar(tipo) <> -1 Entonces Devolver 4
+			Si precompilando Entonces Devolver -1
+	FinSeleccionar
+FinProc
+
+
+Proc TipoDebeSerLiberado(idTipo:Entero):Booleano
+	Eval tipos[idTipo]
+		Devolver NoHayFlag(.Flags, tinfUnión) And HayFlag(.Flags, tinfComplejo)
+	FinEval
+FinProc
+
+
+Proc ObtenerNombreInternoDeTipo(tipo:Cadena):Cadena
+	Seleccionar tipo
+		Caso pCadena
+			Devolver "1"
+		Caso pEntero, pEnteroSig
+			Devolver "4"
+		Caso pWord, pWordSig
+			Devolver "3"
+		Caso pByte, pByteSig, pBooleano
+			Devolver "2"
+		Caso pReal, pDecimal
+			Devolver "5"
+		Caso Otro
+			Seleccionar EsTipo(tipo)
+				Caso 4
+					Devolver "4"
+				Caso 3
+					Devolver "offset _dc_" + tipo + "_"
+				Caso 2
+					Devolver "offset _dt_" + tipo + "_"
+			FinSeleccionar
+	FinSeleccionar
+FinProc
+

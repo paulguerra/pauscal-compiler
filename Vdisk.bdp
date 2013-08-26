@@ -1,0 +1,45 @@
+Importar "Globales.prp"
+Importar "Errores.prp"
+Importar "Cadena.prp"
+Importar "IO.prp"
+
+$EBC- 'Desactivamos EBC para activar la evaluación booleana parcial
+
+
+Proc InicializarDiscosVirtuales()
+	Crear pila, offs
+FinProc
+
+
+Proc PausarDiscosVirtuales()
+	offs.Agregar(pila.QuitarÚltimo())
+	sinDiscos = sinDiscos - 1
+FinProc
+
+
+Proc DespausarDiscosVirtuales()
+	pila.Agregar(offs.QuitarÚltimo())
+	sinDiscos = sinDiscos + 1
+FinProc
+
+
+Proc ActivarDiscosVirtuales()
+	pila.Agregar("")
+	sinDiscos = sinDiscos + 1
+FinProc
+
+
+Proc EliminarDiscoVirtual()
+	Si sinDiscos <= 0 Entonces AgregarError(75, Falso)
+	pila.Item(sinDiscos-1) = ""
+FinProc
+
+
+Proc DesactivarDiscosVirtuales(Opcional dumpear:Booleano):Cadena
+	Var datos:Cadena
+	
+	Si sinDiscos <= 0 Entonces AgregarError(75, Falso)
+	datos = pila.QuitarÚltimo()
+	sinDiscos = sinDiscos - 1
+	Si dumpear Y CadLong(datos) > 0 Entonces Escribir(datos)
+FinProc

@@ -1,0 +1,3 @@
+Var j:Decimal
+j=RealDec(2.0)
+Fin

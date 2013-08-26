@@ -1,0 +1,312 @@
+Importar "Win.prp"
+
+$EBC- 'Desactivamos EBC para activar la evaluación booleana parcial
+
+
+'Variables
+
+Var archivoPrincipal:Cadena 'Indica el archivo que fue indicado para compilar
+Var archivoActual:Cadena 'Indica el archivo actualmente siendo compilado
+Var rutaActual:Cadena
+Var zonaPrivada,zonaPrivadaClase:Booleano
+Var idProcActual:EnteroSig '-1 = ninguno
+Var idClaseActual:EnteroSig '-1 = ninguno
+Var idPropActual:EnteroSig '-1 = ninguno
+Var palabras[]:Cadena
+Var codigoDeInicioGenerado:Booleano
+Var incluirDebug:Booleano
+Var comienzoDelMain:Booleano
+Var linea:Entero
+Var palabrasClave[]:Cadena
+Var precompilando:Booleano
+Var libs[]:Cadena
+Var archivoAsm:pscArchivo
+Var contadorEtiquetas:Entero
+Var totalLíneas:Entero
+
+
+
+'Opciones que pueden ser cambiadas en el código
+Var optBoolCompleto,optAdvertencias,optCadenasExternas:Booleano
+
+
+
+
+'Opciones de la línea de comando
+Var hwndNotificaciones:Entero
+Var controlarProcs,controlarLímites:Booleano
+Var esDll,esBibPrecomp,esChequeo,esConRecursos:Booleano
+
+
+
+
+'Estructuras
+
+Clase cTipoRetorno
+	Público:
+	ClaseVar Tipo:Cadena
+	ClaseVar Tamaño:Entero
+FinClase
+Var tipoRetorno:cTipoRetorno
+
+
+Estruc cInfoLinea, _
+	HayCodigo:Booleano, _
+	IdProc:Entero, _
+	IdClase:Entero, _
+	EstrucControl:Cadena
+Var infoLineas[]:cInfoLinea
+
+
+Estruc cConst, _
+	Nombre:Cadena, _
+	Rep[]:Cadena, _
+	Flags:Entero 'bit 0: ???; bit 1: privado
+Const csinfPrivado=2
+Var consts[]:cConst
+
+
+Estruc cVar, _
+	Nombre:Cadena, _
+	Tipo:Cadena, _
+	Puntero:Booleano, _
+	EsParam:Booleano, _
+	Cantidad:EnteroSig, _
+	Flags:Word, _ 'bit 1: privado; bit 2: importado; bit 3: referencia
+	Extra:Cadena
+Const vinfPrivado = 1, vinfImportado = 2, vinfRef = 4
+Var varLocales[],vars[]:cVar
+
+
+Estruc cCompInfo, _
+	Nombre:Cadena, _
+	Tipo:Cadena, _
+	Puntero:Booleano, _
+	Cantidad:EnteroSig, _
+	Tamaño:Entero
+
+
+Estruc cTipo, _
+	Nombre:Cadena, _
+	Comps[]:cCompInfo, _
+	Tamaño:Entero, _
+	Flags:Word 'bit 0: union; bit 1: complex; bit 2: imported; bit 3: private; bit 4: used
+Const tinfUnión = 1, tinfComplejo = 2, tinfImportado = 4, tinfUsado = 8, tinfPrivado = 8
+Var tipos[]:cTipo
+
+
+Estruc cProp, _
+	Nombre:Cadena, _
+	Tipo:Cadena, _
+	Escritura:Booleano, _
+	PunteroEscritura:Entero, _
+	Lectura:Booleano, _
+	PunteroLectura:Entero, _
+	Flags:Word 'bit 0: private; bit 1: lec var prop; bit 2: esc var prop
+Const pinfPrivado = 1, pinfLVarProp = 2, pinfEVarProp = 4
+
+
+Estruc cDerivClase, _
+	IdClase:Entero, _
+	IdMétodo:Entero
+	
+
+Estruc cDeriv, _
+	Derivadas[]:Entero, _
+	DerivadasClase[]:cDerivClase, _
+	DerivadasTipo[]:Entero
+Var derivadasCódigoPrincipal:cDeriv
+
+
+Estruc cFunc, _
+	Id:Entero, _
+	Nombre:Cadena, _
+	Tipo:Cadena, _
+	Params[]:cVar, _
+	NombreExterno:Cadena, _
+	NombreDll:Cadena, _
+	Derivadas:cDeriv, _
+	Posición1:Entero, _
+	Posición2:Entero, _
+	ComienzoOpcional:Entero, _
+	Flags:Word, _ 'bit 0: external dll; bit 1: private; bit 2: safeproc; bit 3: init procedure; bit 4: forward; bit 5: inherited method; bit 6: imported func; bit 7: dynamic array returned; bit 8: destruct procedure
+	Exportado:Cadena, _
+	LocalVars[]:cVar, _
+	Usado:Booleano
+Const finfExterno = 1, finfPrivFunc = 2, finfSafeProc = 4, finfInicial = 8, finfAdelantado = 16, finfHeredado = 32, finfImportado = 64, finfDynAryRet = 128, finfFinal = 256
+Var procs[]:cFunc, procTipos[]:cFunc	
+
+
+Estruc cClase, _
+	Nombre:Cadena, _
+	Props[]:cProp, _
+	Métodos[]:cFunc, _
+	Vars[]:cVar, _
+	Tamaño:Entero, _
+	Constructores[]:Entero, _
+	Destructores[]:Entero, _
+	Usado:Booleano, _
+	Posición1:Entero, _
+	Posición2:Entero, _
+	IdHeredero:EnteroSig, _
+	NombreHeredero:Cadena, _
+	Flags:Word 'bit 0: imported; bit 1: inherited marked; bit 2: private
+Const cinfImportada=1, cinfYaMarcada=2, cinfPrivada=4
+Var clases[]:cClase
+
+
+Estruc cImportado, _
+	Archivo:Cadena, _
+	Flags:Word
+Const impinfPrivado = 1, impinfExtPrivado = 2, impinfCopiadoAGlobal = 4
+Var importados[]:cImportado
+
+
+Estruc cEtiqueta, _
+	Nombre:Cadena, _
+	Interno:Cadena, _
+	Linea:Entero, _
+	Def:Booleano
+Var etiquetas[]:cEtiqueta
+Var etiquetasDef[]:Cadena
+
+
+Estruc cDato, _
+	Dato:Cadena, _
+	Id:Cadena, _
+	Tipo:Cadena
+Var datos[]:cDato
+
+
+Estruc cEstrucControl, _
+	Tipo:Cadena, _
+	Línea:Entero, _
+	cadInfo1:Cadena, _
+	entInfo1:Entero, _
+	entInfo2:Entero, _
+	entInfo3:Entero, _
+	boolInfo1:Booleano, _
+	boolInfo2:Booleano
+Var estrucControls[]:cEstrucControl
+
+
+
+
+'Variables con nombres de archivos actuales
+Var vArchivoPrecomp, vArchivoTemp, vArchivoAsm:Cadena
+
+
+
+
+' Constantes
+
+Const longitudBásicaClase = 12
+
+Const cSeparadores = "!?.:@()+-*/\&,=<>[]{}$^"
+
+Const cArchivoErrores = "Error.log", cArchivoObj = "Compil.obj", cArchivoInfo = "Info.log", cArchivoExe = "App.exe", cArchivoDll = "App.dll", _
+	   cArchivoMod = "Compil.mod", cArchivoDebug = "Debug.dat", cArchivoRecursos = "Compil.res", cArchivoDecl = "Decl.dec", cArchivoPrecomp = "Precomp.prp", _
+	   cArchivoCarga = "Load.prp"
+
+
+
+
+'Enumerados
+
+Const ictDecFileInvalidInst=1, ictInProcInvalidDecl=2, ictInPropInvalidDecl=3, ictInClassInvalidDecl=4, ictFreeCodeInvalidDecl=5,ictInSelectInvalidDecl=6
+
+Const idhGlobalVarConst=1, idhClaseMember=2, idhTipoMember=3, idhLocalVar=4, idhGlobalDec=5, idhGlobalProc=6
+
+Const cvlVar=1, cvlVarLocal=2, cvlClass=3, cvlEstruc=4, cvlLocalVar=5
+
+Const pEntero = "entero", pEnteroSig = "enterosig", pReal = "real", pByte = "byte", pByteSig = "bytesig", pWord = "word", pWordSig = "wordsig", pBooleano = "booleano", pCadena = "cadena", pDecimal = "decimal" ', pHandled = ">handled<"
+
+Const eSi = "a", eSiNo = "A", eContar = "b", eMientras = "c", eEval = "d", eRepetir = "e", eSeleccionar = "f", eAdmErr = "g", eBloque = "h"
+
+
+
+
+'Clases
+
+Clase cPila
+	Privado:
+	
+	ClaseVar elementos[]:Cadena
+	
+	Público:		
+	
+	Proc Agregar(texto:Cadena)
+		elementos = elementos + [texto]
+	FinProc
+	
+	Proc QuitarÚltimo():Cadena
+		Si LongMat(elementos) = 0 Entonces Salir
+		Resultado = elementos[LongMat(elementos)-1]
+		Redim Preservar elementos, LongMat(elementos)-1
+	FinProc
+	
+	Proc ObtenerÚltimo():Cadena
+		Devolver elementos[LongMat(elementos)-1]
+	FinProc
+
+	Proc ObtenerElemento(índice:Entero):Cadena
+		Devolver elementos[índice]
+	FinProc
+
+	Proc EstablecerElemento(valor:Cadena, índice:Entero)
+		elementos[índice] = valor
+	FinProc
+	
+	Prop Item:Cadena
+		Lec:ObtenerElemento
+		Esc:EstablecerElemento
+	FinProp
+FinClase
+
+Var pila,offs:cPila
+
+Var sinDiscos:EnteroSig
+
+
+
+
+'Funciones
+
+Proc HayFlag(valor, flag:Entero):Booleano
+	Devolver (valor And flag) = flag
+FinProc
+
+Proc NoHayFlag(valor, flag:Entero):Booleano
+	Devolver (valor And flag) = 0
+FinProc
+
+Proc ActivarFlag(Referencia valor:Word, flag:Entero)
+	valor = valor Or flag
+FinProc
+
+Proc DesactivarFlag(Referencia valor:Word, flag:Entero)
+	valor = valor And (Neg flag)
+FinProc
+
+'Versión más rápida de CadLong ya que requiere la cadena por referencia (es decir, no se realiza una copia de la cadena)
+Proc Longitud(Referencia texto:Cadena):Entero
+	Var @Ptr,Ret:Entero
+
+	Ret=CadPtr(texto)
+	Si (Ret=0) Salir
+	Ptr@=Ret-4
+	Resultado=Ptr
+FinProc
+
+
+
+
+'VARIABLES QUE SE PUEDEN SACAR EVENTUALMENTE (POR AHORA NO SE SACAN PORQUE TIRA ERROR DE COMPILACIÓN DEBIDO A UN BUG)
+
+Privado:
+
+Var variableCompInfo:cCompInfo
+Var variableProp:cProp
+Var variableFunc:cFunc
+Var variabelDerivClase:cDerivClase
+

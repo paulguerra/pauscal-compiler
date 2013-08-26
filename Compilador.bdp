@@ -1,0 +1,731 @@
+Importar "Globales.prp"
+Importar "Win32.prp"
+Importar "Aleatorios.prp"
+Importar "Modulo.prp"
+Importar "Derivadas.prp"
+
+$EBC- 'Desactivamos EBC para activar la evaluación booleana parcial
+
+
+Proc Principal()
+	Var crono,cronoMedio:Entero
+	Var i:EnteroSig
+	Var comandos[],códigoCompilado:Cadena
+	Var esPrincipal,preservarErrores:Booleano
+
+	AdmErr
+		crono = Ticks()
+		vArchivoTemp = "Compil" + EntCad(crono) + ".tmp"
+		vArchivoAsm = "Compil" + EntCad(crono) + ".asm"
+		vArchivoPrecomp = "Compil" + EntCad(crono) + ".prp"
+		InicializarGenerador() 'Números aleatorios
+		CargarOpcionesPorDefecto()
+		InicializarDiscosVirtuales()
+		'comandos = ObtenerLíneaComando()
+		comandos = ["", "/f", "codigo.txt"]
+		Si LongMat(comandos) <= 1 Entonces
+			MostrarAcercaDe()
+			Salir
+		FinSi
+		Contar i = 1 a LongMat(comandos)-1 'Salteamos el primero porque es el nombre del ejecutable
+			Seleccionar CadMinus(comandos[i])
+				Caso "/debug"
+					incluirDebug = Verd
+				Caso "/dl"
+					esDll = Verd
+				Caso "/chk"
+					esChequeo = Verd
+				Caso "/r"
+					esConRecursos = Verd
+				Caso "/p"
+					esBibPrecomp = Verd
+				Caso "/m"
+					esPrincipal = Verd
+				Caso "/hwnd"
+					hwndNotificaciones = CadEnt(comandos[i+1])
+					i = i + 1
+				Caso "/lib"
+					libs = libs + [comandos[i+1]]
+					i = i + 1
+				Caso "/f"
+					archivoPrincipal = comandos[i+1]
+					i = i + 1
+				Caso "/err"
+					preservarErrores = Verd
+				Caso "/sf"
+					controlarProcs = Verd
+				Caso "/chkb"
+					controlarLímites = Verd
+				Caso Otro
+					Salir Contar 'TODO: Lanzar error?
+			FinSeleccionar
+		Seguir
+		Si Longitud(archivoPrincipal) = 0 Entonces Salir
+		
+		'Limpiar archivos
+		Si Neg preservarErrores And ExisteArchivo(cArchivoErrores) Entonces BorrarArchivo(cArchivoErrores)
+		Si ExisteArchivo(cArchivoInfo) Entonces BorrarArchivo(cArchivoInfo)
+		Si ExisteArchivo(cArchivoDebug) Entonces BorrarArchivo(cArchivoDebug)
+		Si ExisteArchivo(cArchivoExe) Entonces BorrarArchivo(cArchivoExe)
+		Si ExisteArchivo(cArchivoDll) Entonces BorrarArchivo(cArchivoDll)
+		Si ExisteArchivo(cArchivoDecl) Entonces BorrarArchivo(cArchivoDecl)
+		Si esPrincipal And ExisteArchivo(cArchivoPrecomp) Entonces BorrarArchivo(cArchivoPrecomp)
+
+		'Inicializar
+		CargarPalabrasClave()
+		idClaseActual = -1
+		idProcActual = -1
+		
+		'Compilar (paso 1)
+		ActivarDiscosVirtuales()
+		IniciarCompilación(ArreglarRuta(archivoPrincipal))
+		códigoCompilado = DesactivarDiscosVirtuales()
+		
+		Si Neg esChequeo Entonces MarcarProgreso(0, 0)
+		
+		Contar i = 0 a LongMat(etiquetas)-1
+			Eval etiquetas[i]
+				Si Neg .Def Entonces
+					linea = .Linea
+					AgregarError(39, Falso)
+				FinSi
+			FinEval
+		Seguir
+		
+		Si esChequeo Entonces
+			CrearArchivoNuevo( > esDll ? cArchivoDll : cArchivoExe )
+			Limpiar()
+			Salir
+		FinSi
+		
+		'Post-procesamiento
+		AgregarDerivadas()
+		Si esBibPrecomp Entonces MarcarTodos; SiNo; MarcarIniciales
+		MarcarUsados(-1)
+		MarcarClasesUsadas()
+		
+		'Compilar (paso 2)
+		Crear archivoAsm
+		archivoAsm.Nombre = vArchivoAsm
+		archivoAsm.CrearNuevo(Verd)
+		Escribir(";HECHO CON PAUSCAL (C) 2001-2005 PAUL GUERRA. TODOS LOS DERECHOS RESERVADOS")
+		Escribir(".386")
+		Escribir(".model flat,STDCALL")
+		Escribir("include Decs.cod")
+		DefinirExternos()
+		ArreglarDll(códigoCompilado)
+		
+		'Compilar (paso 3)
+		PostProcesar(códigoCompilado)
+		
+		archivoAsm.Cerrar()
+		LimpiarArchivo(vArchivoAsm)
+		
+		cronoMedio = Ticks() - crono
+		
+		'Ensamblamos
+		EjecutarExterno("Asm /ml/m5/r " + vArchivoAsm + ",Compil")
+		
+		Si esBibPrecomp Entonces
+			Si Neg ExisteArchivo(cArchivoObj) Entonces
+				BorrarArchivo(vArchivoPrecomp)
+				GenerarError 1
+			FinSi
+			SellarPrecomp(cArchivoObj)
+			Si esPrincipal Entonces
+				RenombrarArchivo(vArchivoPrecomp, cArchivoPrecomp)
+			SiNo
+				Si ExisteArchivo(archivoPrincipal + ".prp") Entonces BorrarArchivo(archivoPrincipal + ".prp")
+				RenombrarArchivo(vArchivoPrecomp, archivoPrincipal + ".prp")
+			FinSi
+		SiNo
+			Si esDll Entonces
+				EjecutarExterno("Linker /x/Tpd/aa/c Runtime Math Excp " + GenerarObjTemporales() + " Compil,App,,Import32,Compil.mod" + (> esConRecursos ? ",Compil.res" : ""))
+			SiNo
+				EjecutarExterno("Linker /x/Tpe/aa/c Runtime Math Excp " + GenerarObjTemporales() + " Compil,App,,Import32,Compil.mod" + (> esConRecursos ? ",Compil.res" : ""))
+			FinSi
+			RemoverObjTemporales()
+			Si esDll Entonces
+				Si Neg ExisteArchivo(cArchivoDll) Entonces GenerarError 1
+			SiNo
+				Si Neg ExisteArchivo(cArchivoExe) Entonces GenerarError 1
+			FinSi
+			GenerarArchivoInfo(crono, cronoMedio)
+		FinSi
+		Limpiar()
+	Controlar
+		AgregarError(75, Falso)
+	FinAdmErr
+FinProc
+
+
+Privado:
+
+
+Proc PostProcesar(Referencia códigoCompilado:Cadena)
+	Var i,j,tamaño:EnteroSig
+	
+	Contar i = 0 a LongMat(clases)-1
+		Eval clases[i]
+			Si NoHayFlag(.Flags, cinfImportada) Entonces
+				Si Neg .Usado Entonces LimpiarParteCadena(códigoCompilado, .Posición1, .Posición2)
+				Contar j = 0 a LongMat(.Métodos)-1
+					Eval .Métodos[j]
+						Si HayFlag(.Flags, finfHeredado) Entonces DefinirMétodo(i, j)
+						Si Neg .Usado And NoHayFlag(.Flags, finfImportado) Entonces LimpiarParteCadena(códigoCompilado, .Posición1, .Posición2)
+					FinEval
+				Seguir
+			FinSi
+		FinEval
+	Seguir
+	Contar i = 0 a LongMat(vars)-1
+		Eval vars[i]
+			Si NoHayFlag(.Flags, vinfImportado) Entonces
+				Si .Puntero Or (.Cantidad = -1) Entonces
+					Escribir("__" + .Nombre + " dword 0")
+				SiNo
+					tamaño = MedirEnBytes(.Tipo, , .Cantidad) - 1
+					Escribir("__" + .Nombre + " byte 0")
+					Si tamaño > 0 Entonces EscribirI("byte {0} dup (0)", tamaño)
+				FinSi
+			FinSi
+		FinEval
+	Seguir
+	Contar i = 0 a LongMat(clases)-1
+		Eval clases[i]
+			Si .Usado And (NoHayFlag(.Flags, cinfImportada) Or NoHayFlag(.Flags, cinfPrivada)) Entonces
+				Escribir("_dc_" + .Nombre + "_:")
+				EscribirI("dword offset _destruct_{0}_", i)
+			FinSi
+		FinEval
+	Seguir
+	GenerarInfoTipos()
+	Si incluirDebug Entonces AgregarInfoDebug()
+	Escribir(".code")
+	Contar i = 0 a LongMat(procs)-1
+		Eval procs[i]
+			Si .Usado And (Longitud(.NombreDll) <> 0) And (BuscarNombreDll(.NombreDll, .NombreExterno, i-1) = -1) Entonces
+				Escribir("_" + .NombreDll + "_" + .NombreExterno + "_:")
+				Escribir("lea ebx, [__" + .NombreDll + "_" + .NombreExterno + "_]")
+				Escribir("mov eax,[ebx]")
+				Escribir("test eax,eax")
+				EscribirU("jnz _", contadorEtiquetas)
+				Escribir("push offset __" + .NombreDll + "__")
+				Escribir("push offset " + AgregarDato("'" + .NombreDll + "',0", pByte))
+				Escribir("push offset " + AgregarDato("'" + .NombreDll + "',0", pByte))
+				Escribir("call pscLoadFunc")
+				Escribir("mov [ebx],eax")
+				EscribirU("_{0}:", contadorEtiquetas)
+				contadorEtiquetas = contadorEtiquetas + 1
+				Escribir("jmp eax")
+			FinSi
+		FinEval
+	Seguir
+	Contar i = 0 a LongMat(datos)-1
+		Eval datos[i]
+			Si Longitud(.Tipo) <> 0 Entonces Escribir(.Id + " " + .Tipo + " " + .Dato)
+		FinEval
+	Seguir
+	Si incluirDebug Entonces
+		Escribir("pscDebugSetStr:")
+		Escribir("push dword ptr [ebx]")
+		Escribir("call pscMemFree")
+		Escribir("xor eax,eax")
+		Escribir("test ecx,ecx")
+		EscribirU("jz _{0}", contadorEtiquetas)
+		Escribir("push ecx")
+		Escribir("add dword ptr [esp],5")
+		Escribir("call pscMemAlloc")
+		Escribir("mov [eax],ecx")
+		Escribir("add eax,4")
+		EscribirU("_{0}:", contadorEtiquetas)
+		contadorEtiquetas = contadorEtiquetas + 1
+		Escribir("mov [ebx],eax")
+		Escribir("int 3")
+		Escribir("pscAppCodeStart:")
+	FinSi
+	Escribir(códigoCompilado)
+	Si Neg esBibPrecomp And Neg comienzoDelMain Entonces
+		AgregarCodigoMain()
+		AgregarLlamadasIniciales()
+	FinSi
+	Si esDll Entonces
+		Escribir("LibMain:")
+		Escribir("xor eax,eax")
+		Escribir("inc eax")
+		Escribir("ret")
+	FinSi
+	Si Neg esBibPrecomp Entonces
+		Escribir("pscEnd:")
+		AgregarLlamadasFinalizadoras()
+		LiberarVariables(vars, 0, Verd)
+		Escribir("call pscObjListDispose")
+		Escribir("push 0")
+		Escribir("call ExitProcess")
+	FinSi
+	GenerarArchivoMod()
+	Si Neg esBibPrecomp Entonces
+		Escribir("public pscEnd")
+		Escribir("end start")
+	SiNo
+		Escribir("end")
+	FinSi
+FinProc
+
+
+Proc GenerarArchivoInfo(crono:Entero, cronoMedio:Entero)
+	Var i,j,usados,usadosMétodos,totalesMétodos:EnteroSig
+	Var arch:pscArchivo
+	
+	Si ExisteArchivo(cArchivoInfo) Entonces BorrarArchivo(cArchivoInfo)
+	Crear arch
+	arch.Nombre = cArchivoInfo
+	arch.CrearNuevo(Verd)
+	
+	'Tiempos
+	EscribirEntero(arch, totalLíneas)
+	EscribirEntero(arch, cronoMedio)
+	EscribirEntero(arch, Ticks() - crono)
+	
+	'Variables
+	EscribirEntero(arch, LongMat(vars))
+	Contar i = 0 a LongMat(vars)-1
+		Eval vars[i]
+			usados = usados + MedirEnBytes(.Tipo, .Puntero, .Cantidad)
+		FinEval
+	Seguir
+	EscribirEntero(arch, usados)
+	
+	'Funciones
+	EscribirEntero(arch, LongMat(procs))
+	usados = 0
+	Contar i = 0 a LongMat(procs)-1
+		Si procs[i].Usado Entonces usados = usados + 1
+	Seguir
+	EscribirEntero(arch, usados)
+	
+	'Tamaños
+	EscribirEntero(arch, TamañoArchivo(> esDll ? cArchivoDll : cArchivoExe))
+	
+	'Clases
+	EscribirEntero(arch, LongMat(clases))
+	usados = 0
+	Contar i = 0 a LongMat(clases)-1
+		Eval clases[i]
+			Si .Usado Entonces usados = usados + 1
+			Si NoHayFlag(.Flags, cinfImportada) Or NoHayFlag(.Flags, cinfPrivada) Entonces
+				totalesMétodos = totalesMétodos + LongMat(.Métodos)
+				Contar j = 0 a LongMat(.Métodos)-1
+					Si .Métodos[j].Usado Entonces usadosMétodos = usadosMétodos + 1
+				Seguir
+			FinSi
+		FinEval
+	Seguir
+	EscribirEntero(arch, usados)
+	EscribirEntero(arch, totalesMétodos)
+	EscribirEntero(arch, usadosMétodos)
+FinProc
+
+
+Proc GenerarArchivoMod()
+	Var i,cnt:EnteroSig
+	Var arch:pscArchivo
+	
+	arch = CrearArchivoNuevo(cArchivoMod)
+	Contar i = 0 a LongMat(procs)-1
+		Eval procs[i]
+			Si Longitud(.Exportado) <> 0 Entonces
+				cnt = cnt + 1
+				EscribirI("publicdll __proc_{0}", .Id)
+				arch.EscribirCad("EXPORTS " + .Exportado + "=__proc_" + EntCad(.Id) + CrLf)
+			FinSi
+		FinEval
+	Seguir
+	Si esDll And (cnt = 0) Entonces AgregarError(73, Falso)
+FinProc
+
+Proc AgregarLlamadasFinalizadoras()
+	Var i:EnteroSig
+	
+	Contar i = 0 a LongMat(procs)-1
+		Eval procs[i]
+			Si HayFlag(.Flags, finfFinal) Entonces EscribirI("call __proc_{0}", .Id)
+		FinEval
+	Seguir
+FinProc
+
+
+Proc GenerarInfoTipos()
+	Var i,j:EnteroSig
+	
+	Contar i = 0 a LongMat(tipos)-1
+		Eval tipos[i]
+			Si HayFlag(.Flags, tinfUsado) And (Longitud(.Nombre) <> 0) Entonces
+				Escribir("_dt_" + .Nombre + "_:")
+				Si TipoDebeSerLiberado(i) Entonces
+					Escribir("dword 0")
+					Contar j = 0 a LongMat(.Comps)-1
+						Eval .Comps[j]
+							Si .Puntero Entonces
+								Escribir("dword 4")
+								Escribir("dword 0")
+							SiNo
+								Escribir("dword " + ObtenerNombreInternoDeTipo(.Tipo))
+								EscribirI("dword {0}", .Cantidad)
+							FinSi
+						FinEval
+					Seguir
+					Escribir("dword 0")
+				SiNo
+					Escribir("dword -1")
+					EscribirI("dword ", .Tamaño)
+				FinSi
+			FinSi
+		FinEval
+	Seguir
+FinProc
+
+
+Proc MostrarAcercaDe()
+	Mensaje("Compilador de Pauscal, hecho en Pauscal", pscInformación)
+FinProc
+
+
+Proc DefinirExternos()
+	Var i,j:EnteroSig
+	Var nombClase:Cadena
+	
+	Contar i = 0 a LongMat(vars)-1
+		Eval vars[i]
+			Si (Longitud(.Nombre) <> 0) And ((.Flags And vinfImportado) <> 0) Entonces Escribir("extern __" + .Nombre)
+		FinEval
+	Seguir
+	Contar i = 0 a LongMat(procs)-1
+		Eval procs[i]
+			Si (Longitud(.Nombre) <> 0) And (.Usado Or ((.Flags And finfFinal) <> 0)) And ((.Flags And finfImportado) <> 0) Entonces
+				Si Longitud(.NombreDll) = 0 Entonces CrearExterno("__proc_" + EntCad(.Id), "__proc_" + .Nombre)
+			FinSi
+		FinEval
+	Seguir
+	Contar i = 0 a LongMat(clases)-1
+		Eval clases[i]
+			Si .Usado And (Longitud(.Nombre) <> 0) Entonces
+				Si (.Flags And cinfImportada) <> 0 Entonces
+					nombClase = .Nombre
+					Contar j = 0 a LongMat(.Métodos)-1
+						Eval .Métodos[j]
+							Si .Usado And ((.Flags And finfImportado) <> 0) Entonces CrearExterno("__proc_" + EntCad(.Id) + "_c" + EntCad(i), "__proc_" + .Nombre + "_c" + nombClase)
+						FinEval
+					Seguir
+					CrearExterno("_destruct_" + EntCad(i) + "_", "_destruct_" + .Nombre + "_")
+				FinSi
+			FinSi
+		FinEval
+	Seguir
+FinProc
+
+
+Proc MarcarTodos()
+	Var i,j:EnteroSig
+	
+	Contar i = 0 a LongMat(procs)-1
+		Si Longitud(procs[i].NombreDll) = 0 Entonces AgregarDerivadaDeProc(i, -1, Verd)
+	Seguir
+	Contar i = 0 a LongMat(clases)-1
+		Eval clases[i]
+			Si ((.Flags And cinfImportada) = 0) Or ((.Flags And cinfPrivada) = 0) Entonces
+				Contar j = 0 a LongMat(.Métodos)-1
+					Si Longitud(.Métodos[j].NombreDll) = 0 Entonces AgregarDerivadaDeProc(j, i, Verd)
+				Seguir
+			FinSi
+		FinEval
+	Seguir
+FinProc
+
+
+Proc MarcarIniciales()
+	Var i:EnteroSig
+	
+	Contar i = 0 a LongMat(procs)-1
+		Eval procs[i]
+			Si (.Flags And finfInicial) <> 0 Entonces AgregarDerivadaDeProc(i, -1, Verd)
+		FinEval
+	Seguir
+FinProc
+
+
+Proc MarcarClasesUsadas()
+	Var i:EnteroSig
+	
+	Contar i = 0 a LongMat(clases)-1
+		MarcarUsadosClase(-1, i)
+	Seguir
+FinProc
+
+
+Proc MarcarUsados(idProc:EnteroSig)
+	Var i:EnteroSig
+	Var @derivada:cDeriv
+	
+	Si idProc <> -1 Entonces
+		procs[idProc].Usado = Verd
+		derivada@ = procs[idProc].Derivadas@
+	SiNo
+		derivada@ = derivadasCódigoPrincipal@
+	FinSi
+	Eval derivada
+		Contar i = 0 a LongMat(.Derivadas)-1
+			MarcarUsados(.Derivadas[i])
+		Seguir
+		Contar i = 0 a LongMat(.DerivadasClase)-1
+			Eval .DerivadasClase[i]
+				MarcarUsadosClase(.IdMétodo, .IdClase)
+			FinEval
+		Seguir
+		Contar i = 0 a LongMat(.DerivadasTipo)-1
+			MarcarUsadosTipo(.DerivadasTipo[i])
+		Seguir
+	FinEval
+FinProc
+
+
+Proc MarcarUsadosClase(idProc:EnteroSig, idClase:EnteroSig)
+	Var i:EnteroSig
+	
+	Eval clases[idClase]
+		Si ((.Flags And cinfImportada) <> 0) And ((.Flags And cinfPrivada) <> 0) Entonces
+			.Usado = Verd
+			Salir
+		FinSi
+		Si idProc >= LongMat(.Métodos) Entonces Salir 'TODO: es necesario?
+		.Usado = Verd
+		Si idProc <> -1 Entonces 'TODO: esta condición no estaba en el código original porque no era necesaria, hay que ver si realmente ésta era la lógica esperada
+			Eval .Métodos[idProc]
+				Si Neg .Usado Entonces
+					.Usado = Verd
+					Eval .Derivadas
+						Contar i = 0 a LongMat(.Derivadas)-1
+							MarcarUsados(.Derivadas[i])
+						Seguir
+						Contar i = 0 a LongMat(.DerivadasClase)-1
+							Eval .DerivadasClase[i]
+								MarcarUsadosClase(.IdMétodo, .IdClase)
+							FinEval
+						Seguir
+						Contar i = 0 a LongMat(.DerivadasTipo)-1
+							MarcarUsadosTipo(.DerivadasTipo[i])
+						Seguir
+					FinEval
+				FinSi
+			FinEval
+		FinSi
+		Si (.IdHeredero <> 0) And ((.Flags And cinfYaMarcada) = 0) Entonces
+			.Flags = .Flags Or cinfYaMarcada
+			Contar i = 0 a LongMat(.Métodos)-1
+				Si .Usado And ((.Flags And finfHeredado) <> 0) Entonces MarcarUsadosClase(i, clases[idClase].IdHeredero)
+			Seguir
+		FinSi
+	FinEval
+FinProc
+
+
+Proc MarcarUsadosTipo(idTipo:EnteroSig)
+	Eval tipos[idTipo]
+		.Flags = .Flags Or tinfUsado
+	FinEval
+FinProc
+
+Proc Limpiar()
+FinProc
+
+
+Proc CargarPalabrasClave()
+	Redim palabrasClave,81
+	palabrasClave[0] = "contar"
+	palabrasClave[1] = "seguir"
+	palabrasClave[2] = "fin"
+	palabrasClave[3] = "mientras"
+	palabrasClave[4] = "finmientras"
+	palabrasClave[5] = "si"
+	palabrasClave[6] = "finsi"
+	palabrasClave[7] = "eval"
+	palabrasClave[8] = "fineval"
+	palabrasClave[9] = "or"
+	palabrasClave[10] = "xor"
+	palabrasClave[11] = "and"
+	palabrasClave[12] = "exportar"
+	palabrasClave[13] = "cadena"
+	palabrasClave[14] = "importar"
+	palabrasClave[15] = "estruc"
+	palabrasClave[16] = "var"
+	palabrasClave[17] = "proc"
+	palabrasClave[18] = "finproc"
+	palabrasClave[19] = "entero"
+	palabrasClave[20] = "booleano"
+	palabrasClave[21] = "byte"
+	palabrasClave[22] = "real"
+	palabrasClave[23] = "otro"
+	palabrasClave[24] = "seleccionar"
+	palabrasClave[25] = "caso"
+	palabrasClave[26] = "salir"
+	palabrasClave[27] = "devolver"
+	palabrasClave[28] = "realent"
+	palabrasClave[29] = "entreal"
+	palabrasClave[30] = "pi"
+	palabrasClave[31] = "raizcuad"
+	palabrasClave[32] = "sen"
+	palabrasClave[33] = "cos"
+	palabrasClave[34] = "tan"
+	palabrasClave[35] = "sino"
+	palabrasClave[36] = "long"
+	palabrasClave[37] = "borrar"
+	palabrasClave[38] = "mod"
+	palabrasClave[39] = "shr"
+	palabrasClave[40] = "shl"
+	palabrasClave[41] = "word"
+	palabrasClave[42] = "dword"
+	palabrasClave[43] = "puertoenviar"
+	palabrasClave[44] = "puertorecibir"
+	palabrasClave[45] = "clase"
+	palabrasClave[46] = "finclase"
+	palabrasClave[47] = "prop"
+	palabrasClave[48] = "finprop"
+	palabrasClave[49] = "lec"
+	palabrasClave[50] = "esc"
+	palabrasClave[51] = "clasevar"
+	palabrasClave[52] = "constructor"
+	palabrasClave[53] = "destructor"
+	palabrasClave[54] = "const"
+	palabrasClave[55] = "crear"
+	palabrasClave[56] = "destruir"
+	palabrasClave[57] = "límite"
+	palabrasClave[58] = "longmat"
+	palabrasClave[59] = "enterosig"
+	palabrasClave[60] = "bytesig"
+	palabrasClave[61] = "nulo"
+	palabrasClave[62] = "resultado"
+	palabrasClave[63] = "admerr"
+	palabrasClave[64] = "controlar"
+	palabrasClave[65] = "finalmente"
+	palabrasClave[66] = "finadmerr"
+	palabrasClave[67] = "neg"
+	palabrasClave[68] = "not"
+	palabrasClave[69] = "exp"
+	palabrasClave[70] = "nuevo"
+	palabrasClave[71] = "aleatorio"
+	palabrasClave[72] = "unión"
+	palabrasClave[73] = "bloque"
+	palabrasClave[74] = "finbloque"
+	palabrasClave[75] = "prototipo"
+	palabrasClave[76] = "log"
+	palabrasClave[77] = "logbase"
+	palabrasClave[78] = "inicio"
+	palabrasClave[79] = "interrumpir"
+	palabrasClave[80] = "entonces"
+FinProc
+
+
+Proc CrearExterno(nombR, nombE:Cadena)
+	Escribir("extern " + nombE + ":PROC")
+	Escribir(nombR + " equ " + NombE)
+FinProc
+
+
+Proc BuscarNombreDll(nombreDll:Cadena, Opcional nombreExterno:Cadena, Opcional puntoMedio:EnteroSig = -1, Opcional puntoMedioEsInicio:Booleano):EnteroSig
+	Var i,p1,p2:EnteroSig
+	
+	Si puntoMedioEsInicio Entonces
+		p2 = LongMat(procs)-1
+		p1 = > puntoMedio = -1 ? 0 : puntoMedio
+	SiNo
+		p1 = 0
+		p2 = > puntoMedio = -1 ? LongMat(procs)-1 : puntoMedio
+	FinSi
+	Contar i = p1 a p2
+		Eval procs[i]
+			Si .Usado And ((.Flags And finfExterno) = 0) And (.NombreDll = nombreDll) Entonces
+				Resultado = i
+				Si (Longitud(nombreExterno) = 0) Or (.NombreExterno = nombreExterno) Entonces Salir
+			FinSi
+		FinEval
+	Seguir
+	Resultado = -1
+FinProc
+
+
+Proc ArreglarDll(Referencia código:Cadena)
+	Var i,ret:EnteroSig
+	
+	Contar i = 0 a LongMat(procs)-1
+		Eval procs[i]
+			Si Longitud(.NombreDll) <> 0 Entonces
+				Si .Usado Entonces
+					Si (.Flags And finfExterno) = 0 Entonces
+						Si BuscarNombreDll(.NombreDll, ,i-1) = -1 Entonces Escribir("__" + .NombreDll + "__ dword 0")
+						Si BuscarNombreDll(.NombreDll, .NombreExterno, i-1) = -1 Entonces Escribir("__" + .NombreDll + "_" + .NombreExterno + "_ dword 0")
+					FinSi
+				SiNo
+					Si (.Flags And finfExterno) = 0 Entonces
+						ret = BuscarNombreDll(.NombreDll, .NombreExterno, i-1)
+						Si ret <> -1 Entonces DesactivarFlag(procs[ret].Flags, finfExterno)
+					FinSi
+				FinSi
+			SiNo
+				Si Neg esBibPrecomp And ((.Flags And finfImportado) = 0) And Neg .Usado Entonces LimpiarParteCadena(código, .Posición1, .Posición2)
+			FinSi
+		FinEval
+	Seguir
+FinProc
+
+
+Proc LimpiarParteCadena(Referencia texto:Cadena, pos1:Entero, pos2:Entero)
+	Var @ptr:Byte
+	
+	Mientras (pos1 <= pos2)
+		ptr@ = CadPtr(texto)+pos1-1
+		ptr = &20 'Espacio
+		pos1 = pos1 + 1
+	FinMientras
+FinProc
+
+
+Proc DefinirMétodo(idClase:Entero, idProc:Entero)
+	Var idHeredero:Entero
+	
+	Eval clases[idClase]
+		idHeredero = .IdHeredero
+		Eval .Métodos[idProc]
+			EscribirI("__proc_{0}_c{1} equ __proc_{0}_c{2}", .Id, idClase, idHeredero)
+		FinEval
+	FinEval
+FinProc
+
+
+Proc AgregarInfoDebug()
+	Var i,CntVar:EnteroSig
+	Var arch:pscArchivo
+
+	Escribir("_debug_globalinfo:")
+	Contar i = 0 a LongMat(vars)-1
+		Si Longitud(vars[i].Nombre) <> 0 Entonces cntVar = cntVar + 1
+	Seguir
+	EscribirI("dword ", cntVar)
+	Contar i = 0 a LongMat(vars)-1
+		Eval vars[i]
+			Si Longitud(.Nombre) <> 0 Entonces Escribir("dword offset __" + .Nombre)
+		FinEval
+	Seguir
+	arch = CrearArchivoNuevo(cArchivoDebug)
+	EscribirEntero(arch, LongMat(vars)+1) ' +1 = ajuste VB
+	EscribirVars(arch, vars)
+	EscribirEntero(arch, LongMat(procs)+1) ' +1 = ajuste VB
+	EscribirFuncs(arch, procs)
+	EscribirEntero(arch, LongMat(clases)+1) ' +1 = ajuste VB
+	EscribirClases(arch, clases)
+	EscribirEntero(arch, LongMat(infoLineas)+1) ' +1 = ajuste VB
+	EscribirInfoLineas(arch, infoLineas)
+FinProc
+
+CambiarDirectorioActual("C:\Archivos de programa\Pauscal\Editor\Compilador")
+Principal()
+

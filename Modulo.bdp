@@ -1,0 +1,344 @@
+Importar "Win.prp"
+Importar "Cadena.prp"
+Importar "Aleatorios.prp"
+Importar "Globales.prp"
+Importar "Vdisk.prp"
+Importar "Linea.prp"
+
+$EBC- 'Desactivamos EBC para activar la evaluación booleana parcial
+
+
+Proc IniciarCompilación(archivo:Cadena)
+	ActivarDiscosVirtuales()
+	precompilando = Verd
+	CompilarArchivo(archivo, Verd)
+	VerificarAdelantados()
+	DesactivarDiscosVirtuales()
+	Si esBibPrecomp Entonces
+		AgregarLlamadaFinalizadora()
+		GenerarPrecomp()
+	FinSi
+	RealizarCargaEfectiva()
+	ArreglarTamañoTipos()
+	ArreglarHerencia()
+	VerificarDuplicados()
+	DefinirPúblico()
+	precompilando = Falso
+	CompilarArchivo(archivo, Falso)
+FinProc
+
+
+Privado:
+
+
+Proc ArreglarHerencia()
+	Var i, indice:EnteroSig
+	
+	Contar i = 0 a LongMat(clases)-1
+		Eval clases[i]
+			Si ((.Flags And cinfImportada) = 0) Or ((.Flags And cinfPrivada) = 0) Entonces
+				Si Longitud(.NombreHeredero) <> 0 Entonces
+					indice = AdmClaseBuscar(.NombreHeredero)
+					Si indice <> -1 Entonces CopiarInfoDeClase(i, indice, Falso)
+					.NombreHeredero = ""
+				FinSi
+			FinSi
+		FinEval
+	Seguir
+FinProc
+
+
+Proc CopiarInfoDeClase(idClaseDst:Entero, idClaseFnt:Entero, soloCopiar:Booleano)
+	Var i,pos:EnteroSig
+	Var nombre:Cadena
+	
+	Eval clases[idClaseDst]
+		pos = .Posición1
+		nombre = .Nombre
+		Si soloCopiar Entonces
+			clases[idClaseDst] = clases[idClaseFnt]
+		SiNo
+			AgregarElementos(clases[idClaseDst], clases[idClaseFnt])
+		FinSi
+		.Nombre = nombre
+		.Posición1 = pos
+		.IdHeredero = idClaseFnt
+		Contar i = 0 a LongMat(clases[idClaseFnt].Métodos)-1
+			Eval .Métodos[i] 'TODO: bug??
+				.Flags = .Flags Or finfHeredado
+				.Usado = Verd
+			FinEval
+		Seguir
+	FinEval
+FinProc
+
+
+Proc AgregarElementos(Referencia dst,fnt:cClase)
+	Var métodos[]:cFunc
+	Var i:EnteroSig
+	Var deltaF,deltaV:Entero
+	
+	Eval dst
+		deltaF = LongMat(fnt.Métodos)
+		
+		.Tamaño = .Tamaño + fnt.Tamaño - longitudBásicaClase
+		Si LongMat(fnt.Métodos) > 0 Entonces 'TODO: remover una vez que el bug esté solucionado
+			.Métodos = fnt.Métodos + .Métodos
+		FinSi
+		Contar i = 0 a LongMat(.Métodos)-1
+			.Métodos[i].Id = i
+		Seguir
+		
+		Contar i = 0 a LongMat(.Destructores)-1
+			.Destructores[i] = .Destructores[i] + deltaF
+		Seguir
+		Si LongMat(fnt.Destructores) > 0 Entonces 'TODO: remover una vez que el bug esté solucionado
+			.Destructores = fnt.Destructores + .Destructores
+		FinSi
+		
+		Contar i = 0 a LongMat(.Constructores)-1
+			.Constructores[i] = .Constructores[i] + deltaF
+		Seguir
+		Si LongMat(fnt.Constructores) > 0 Entonces 'TODO: remover una vez que el bug esté solucionado
+			.Constructores = fnt.Constructores + .Constructores
+		FinSi
+		
+		deltaV = LongMat(fnt.Vars)
+		
+		Si LongMat(fnt.Vars) > 0 Entonces 'TODO: remover una vez que el bug esté solucionado
+			.Vars = fnt.Vars + .Vars
+		FinSi
+		
+		Contar i = 0 a LongMat(.Props)-1
+			Eval .Props[i]
+				.PunteroEscritura = > .Flags And pinfEVarProp ? deltaV : deltaF
+				.PunteroLectura = > .Flags And pinfLVarProp ? deltaV : deltaF
+			FinEval
+		Seguir
+		Si LongMat(fnt.Props) > 0 Entonces 'TODO: remover una vez que el bug esté solucionado
+			.Props = fnt.Props + .Props
+		FinSi
+	FinEval
+FinProc
+
+
+Proc VerificarDuplicados()
+	Var i,j,k:EnteroSig
+	Var nombre:Cadena
+	
+	Contar i = 0 a LongMat(clases)-1
+		Eval clases[i]
+			Si Longitud(.Nombre) <> 0 Entonces
+				'Clases
+				Contar j = 0 a i-1
+					Si .Nombre = clases[j].Nombre Entonces AgregarError(2, Falso, .Nombre)
+				Seguir
+				
+				'Variables
+				Contar j = 1 a LongMat(.Vars)-1
+					nombre = .Vars[j].Nombre
+					Si Longitud(nombre) <> 0 Entonces
+						Contar k = 0 a j-1
+							Si nombre = .Vars[k].Nombre Entonces AgregarError(2, Falso, nombre, .Nombre)
+						Seguir
+					FinSi
+				Seguir
+				
+				'Propiedades
+				Contar j = 1 a LongMat(.Props)-1
+					nombre = .Props[j].Nombre
+					Si Longitud(nombre) <> 0 Entonces
+						Contar k = 0 a j-1
+							Si nombre = .Props[k].Nombre Entonces AgregarError(2, Falso, nombre, .Nombre)
+						Seguir
+					FinSi
+				Seguir
+				
+				'Métodos
+				Contar j = 1 a LongMat(.Métodos)-1
+					nombre = .Métodos[j].Nombre
+					Si Longitud(nombre) <> 0 Entonces
+						Contar k = 0 a j-1
+							Si nombre = .Métodos[k].Nombre Entonces AgregarError(2, Falso, nombre, .Nombre)
+						Seguir
+					FinSi
+				Seguir
+			FinSi
+		FinEval
+	Seguir
+FinProc
+
+
+Proc ArreglarTamañoTipos()
+	Var i,j:EnteroSig
+	Var cnt:Entero
+	
+	Contar i = 0 a LongMat(tipos)-1
+		Eval tipos[i]
+			Si (.Flags And tinfImportado) = 0 Entonces
+				Contar j = 0 a LongMat(.Comps)-1
+					Eval .Comps[j]
+						Si .Tamaño = 0 Entonces
+							Si EsTipo(.Tipo) = 2 Entonces
+								.Tamaño = ReMedirTamaño(AdmTipoBuscar(.Tipo))
+							SiNo
+								.Tamaño = MedirEnBytes(.Tipo, .Puntero, .Cantidad)
+							FinSi
+						FinSi
+					FinEval
+				Seguir
+			FinSi
+		FinEval
+	Seguir
+	Contar i = 0 a LongMat(clases)-1
+		Eval clases[i]
+			Si ((.Flags And cinfImportada) = 0) Or ((.Flags And cinfPrivada) = 0) Entonces
+				cnt = longitudBásicaClase
+				Contar j = 0 a LongMat(.Vars)-1
+					Eval .Vars[j]
+						cnt = cnt + MedirEnBytes(.Tipo, .Puntero, .Cantidad)
+					FinEval
+				Seguir
+				.Tamaño = cnt
+			FinSi
+		FinEval
+	Seguir
+FinProc
+
+
+
+Proc RealizarCargaEfectiva()
+	Var i:EnteroSig
+	
+	Mientras i < LongMat(importados)-1 'No usamos un For porque el tamaño puede variar durante el ciclo
+		Si (importados[i].Flags And impinfExtPrivado) = 0 Entonces ImportarArchivoConDatos(importados[i].Archivo)
+		i = i + 1
+	FinMientras
+FinProc
+
+
+Proc CompilarArchivo(archivo:Cadena, precompilar:Booleano)
+	Var archivoHandler:pscArchivo
+	Var codigo, codigoLinea:Cadena
+	Var codigoSeparado[]:Cadena
+	Var maxLineas, comentarioPos:Entero
+	
+	archivoActual = archivo
+	rutaActual = ObtenerRuta(archivo)
+	CargarOpcionesPorDefecto()
+	zonaPrivada = Falso
+	Crear archivoHandler
+	archivoHandler.Nombre = archivo
+	archivoHandler.Abrir()
+	Si archivoHandler.Tamaño = 0 Entonces Salir 'El destructor cierra el archivo
+	Si archivoHandler.LeerEnt() = 0 Entonces 'Verificamos que tengamos el '0' que marca archivos con encabezado
+		archivoHandler.Posición = archivoHandler.LeerEnt()
+	SiNo
+		archivoHandler.Posición = 0
+	FinSi
+	codigo = archivoHandler.LeerCad(archivoHandler.Tamaño - archivoHandler.Posición)
+	archivoHandler.Cerrar()
+	codigoSeparado = Separar(codigo, CrLf)
+	maxLineas = LongMat(codigoSeparado)
+	totalLíneas = totalLíneas + maxLineas
+	Contar linea = 0 A maxLineas - 1
+		codigoLinea = codigoSeparado[linea]
+		Si Longitud(codigoLinea) > 0 Entonces
+			Mientras CompilarLinea(codigoLinea, precompilar)
+				Si linea = maxLineas - 1 Entonces AgregarError(70, Falso)
+				linea = linea + 1
+				comentarioPos = BuscarEnCad(codigoLinea, "'")
+				Si comentarioPos > 0 Entonces codigoLinea = IzquierdaCad(codigoLinea, comentarioPos - 1) 
+				Repetir
+					codigoLinea = IzquierdaCad(codigoLinea, Longitud(codigoLinea) - 1)
+				HastaQue ParteCad(codigoLinea, Longitud(codigoLinea) - 1) = "_"
+				codigoLinea = codigoLinea + codigoSeparado[linea]
+			FinMientras
+		FinSi
+	Seguir
+	Si idProcActual <> -1 Entonces AgregarError(8, Falso)
+	VerificarTodoCerrado()
+FinProc
+
+
+Proc VerificarAdelantados()
+	Var i,j:EnteroSig
+	
+	Contar i = 0 a LongMat(clases)-1
+		Eval clases[i]
+			Contar j = 0 a LongMat(.Métodos)-1
+				Si (.Métodos[j].Flags And finfAdelantado) > 0 Entonces AgregarError(88, Falso, CadMayus(.Métodos[j].Nombre), CadMayus(.Nombre))
+			Seguir
+		FinEval
+	Seguir
+FinProc
+
+
+Proc HayVariablesObjecto():Booleano
+	Var i:EnteroSig
+	
+	Contar i = 0 a LongMat(vars)-1
+		Eval vars[i]
+			Si ((.Flags And vinfImportado) = 0) And ((.Flags And vinfPrivado) = 0) Entonces
+				Si EsTipo(.Tipo) = 3 Entonces Devolver Verd
+			FinSi
+		FinEval
+	Seguir
+FinProc
+
+
+Proc AgregarLlamadaFinalizadora()
+	Var nuevoProc:cFunc
+	
+	Si Neg HayVariablesObjecto() Entonces Salir
+	Eval nuevoProc
+		.Id = LongMat(procs)
+		.Nombre = "_d" + EntCad(.Id) + "_" + EntCad(GenerarNúmeroAlAzar(0, 2000000000))
+		.Flags = finfFinal
+		EscribirU("__proc_{0} proc", .Id)
+		LiberarVariables(vars, 0, Verd)
+		Escribir("ret")
+		EscribirU("__proc_{0} endp", .Id)
+	FinEval
+	procs = procs + [nuevoProc]
+FinProc
+
+
+Proc DefinirPúblico()
+	Var i,j:EnteroSig
+	
+	Si Neg esBibPrecomp Entonces Salir
+	
+	Contar i = 0 a LongMat(vars)-1
+		Eval vars[i]
+			Si ((.Flags And vinfPrivado) = 0) And ((.Flags And vinfImportado) = 0) Entonces Escribir("public __" + .Nombre)
+		FinEval
+	Seguir
+	
+	Contar i = 0 a LongMat(clases)-1
+		Eval clases[i]
+			Si (.Flags And cinfPrivada) = 0 Entonces
+				Contar j = 0 a LongMat(.Métodos)-1
+					'TODO: comprobar desfasaje
+					Si (.Métodos[j].Flags And finfImportado) = 0 Entonces CrearFunc("__proc_" + EntCad(j) + "_c" + EntCad(i), "__proc_" + .Métodos[j].Nombre + "_c" + .Nombre)
+				Seguir
+				'TODO: comprobar desfasaje
+				Si (.Flags And cinfImportada) = 0 Entonces CrearFunc("_destruct_" + EntCad(i) + "_", "_destruct_" + .Nombre + "_")
+			FinSi
+			Si (.Flags And cinfImportada) = 0 Entonces
+				Contar j = 0 a LongMat(.Métodos)-1
+					'TODO: comprobar desfasaje
+					Si (.Métodos[j].Flags And finfImportado) <> 0 Entonces CrearFunc("__proc_" + EntCad(j) + "_c" + EntCad(i), "__proc_" + .Métodos[j].Nombre + "_c" + .Nombre)
+				Seguir
+			FinSi
+		FinEval
+	Seguir
+FinProc
+
+
+Proc CrearFunc(nombR, nombP:Cadena)
+	Escribir(nombP + ":")
+	Escribir("jmp " + nombR)
+	Escribir("public " + nombP)
+FinProc
+
