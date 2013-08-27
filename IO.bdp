@@ -99,7 +99,7 @@ Proc LimpiarArchivo(archivo:Cadena)
 		temp.CrearNuevo(Verd)
 		Mientras Neg arch.FinDeArchivo
 			línea = arch.LeerLínea()
-			Si Longitud(línea) <> 0 Entonces arch.EscribirCad(línea + CrLf)
+			Si Longitud(línea) <> 0 Entonces temp.EscribirCad(línea + CrLf)
 		FinMientras
 	Finalmente
 		arch.Cerrar()
