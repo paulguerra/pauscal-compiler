@@ -10,6 +10,13 @@ FinProc
 
 
 Proc QuitarComillas(texto:Cadena):Cadena
+	Var textLong:Entero
+
+	textLong = Longitud(texto)
+	Si textLong < 2 Entonces AgregarError(0, Falso)
+	Si ParteCad(texto, 1, 1) <> #34 Entonces AgregarError(0, Falso)
+	Si ParteCad(texto, textLong, 1) <> #34 Entonces AgregarError(0, Falso)
+	Devolver ParteCad(texto, 2, textLong - 1)
 FinProc
 
 

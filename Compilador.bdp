@@ -18,7 +18,7 @@ Proc Principal()
 		vArchivoTemp = "Compil" + EntCad(crono) + ".tmp"
 		vArchivoAsm = "Compil" + EntCad(crono) + ".asm"
 		vArchivoPrecomp = "Compil" + EntCad(crono) + ".prp"
-		InicializarGenerador() 'Números aleatorios
+		InicializarGeneradorNúmeroAlAzar() 'Números aleatorios
 		CargarOpcionesPorDefecto()
 		InicializarDiscosVirtuales()
 		'comandos = ObtenerLíneaComando()

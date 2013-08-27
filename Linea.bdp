@@ -150,16 +150,19 @@ FinProc
 
 
 Const cExtensión = 10
-Proc SepararEnPalabras(Referencia linea:Cadena, Referencia lineaContinua:Booleano, Referencia maximo:Entero):Booleano
+Proc SepararEnPalabras(Referencia linea:Cadena, Referencia lineaContinua:Booleano, Referencia maximo:Entero):Entero ' TODO: cambiar a Booleano (ver explicación abajo)
+'TODO: hay un bug que hace que si una condición chequea directamente un booleano retornado por una función, se testea todo el Dword y no sólo el Byte, por lo tanto
+'la condición puede ser incorrecta.
 	Var i:Entero
 	Var car:Cadena
-	
+	Var enCadena:Booleano
+
 	maximo = 0
 	Redim palabras, cExtensión
 	Contar i = 1 a Longitud(linea)
 		car = ParteCad(linea, i, 1)
 		Si car = #8 Entonces car = " " 'los tabs son espacios
-		Si (BuscarEnCad(cSeparadores, car) <> 0) And (Neg Resultado) Entonces
+		Si (BuscarEnCad(cSeparadores, car) <> 0) And (Neg enCadena) Entonces
 			Si Longitud(palabras[maximo]) <> 0 Entonces
 				maximo = maximo + 1
 				Redim Preservar palabras, maximo+cExtensión
@@ -168,7 +171,7 @@ Proc SepararEnPalabras(Referencia linea:Cadena, Referencia lineaContinua:Boolean
 			maximo = maximo + 1
 			Redim Preservar palabras, maximo+cExtensión
 		SiNo
-			Si Neg Resultado Entonces
+			Si Neg enCadena Entonces
 				Seleccionar car
 					Caso "'"
 						Salir Contar
@@ -179,16 +182,16 @@ Proc SepararEnPalabras(Referencia linea:Cadena, Referencia lineaContinua:Boolean
 				FinSeleccionar
 			FinSi
 			Si car = #34 Entonces
-				Si Resultado And (i <> Longitud(linea)) Entonces
+				Si enCadena And (i <> Longitud(linea)) Entonces
 					Si ParteCad(linea,i+1,1) = #34 Entonces
 						i=i+1
 						palabras[maximo] = palabras[maximo] + #34
-						Resultado = Neg Resultado
+						enCadena = Neg enCadena
 					FinSi
 				FinSi
-				Resultado = Neg Resultado
+				enCadena = Neg enCadena
 			FinSi
-			Si Resultado Or (car <> " ") Entonces
+			Si enCadena Or (car <> " ") Entonces
 				palabras[maximo] = palabras[maximo] + car
 			SiNo; Si Longitud(palabras[maximo]) <> 0 Entonces
 				maximo = maximo + 1
@@ -197,6 +200,7 @@ Proc SepararEnPalabras(Referencia linea:Cadena, Referencia lineaContinua:Boolean
 		FinSi
 	Seguir
 	Si Neg lineaContinua Entonces linea = ""
+	Resultado = > enCadena ? 1 : 0
 FinProc
 
 
