@@ -15,7 +15,7 @@ Proc CompilarLinea(codigoLinea:Cadena, precompilar:Booleano):Booleano
 	Var indice,siguientePalabra:Entero
 	
 	Si SepararEnPalabras(codigoLinea, lineaContinua, indice) Entonces AgregarError(3, Falso)
-	Mientras Longitud(palabras[indice]) = 0 ' And indice <> 0
+	Mientras (Longitud(palabras[indice]) = 0) And (indice <> 0)
 		indice = indice - 1
 	FinMientras
 	Si palabras[indice] = "_" Entonces Devolver Verd
@@ -112,12 +112,8 @@ FinProc
 
 
 Proc AgregarCodigoMain()
-	Escribir("start:")
-	Escribir("mov ebx,offset pscBeginCode")
-	Si incluirDebug Entonces Escribir("mov ebp,esp")
-	Escribir("call pscBeginExec")
-	Si esDll Entonces Escribir("retn 12")
-	Escribir("pscBeginCode:")
+	Escribir("_main_proc_ proc")
+	Escribir("LOCAL __$tempParams[__$localspace_c0_p0_]:dword")
 FinProc
 
 

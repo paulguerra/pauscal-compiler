@@ -99,10 +99,13 @@ Estruc cProp, _
 	Nombre:Cadena, _
 	Tipo:Cadena, _
 	Escritura:Booleano, _
-	PunteroEscritura:Entero, _
+	PtrEscritura:Cadena, _
+	IdPtrEscritura:Entero, _
 	Lectura:Booleano, _
-	PunteroLectura:Entero, _
-	Flags:Word 'bit 0: private; bit 1: lec var prop; bit 2: esc var prop
+	PtrLectura:Cadena, _
+	IdPtrLectura:Entero, _
+	Flags:Word, _ 'bit 0: private; bit 1: lec var prop; bit 2: esc var prop
+	Línea:Entero
 Const pinfPrivado = 1, pinfLVarProp = 2, pinfEVarProp = 4
 
 
@@ -133,7 +136,7 @@ Estruc cFunc, _
 	Exportado:Cadena, _
 	LocalVars[]:cVar, _
 	Usado:Booleano
-Const finfExterno = 1, finfPrivFunc = 2, finfSafeProc = 4, finfInicial = 8, finfAdelantado = 16, finfHeredado = 32, finfImportado = 64, finfDynAryRet = 128, finfFinal = 256
+Const finfExterno = 1, finfPrivFunc = 2, finfSafeProc = 4, finfInicial = 8, finfAdelantado = 16, finfHeredado = 32, finfImportado = 64, finfRetArrDin = 128, finfFinal = 256
 Var procs[]:cFunc, procTipos[]:cFunc	
 
 
@@ -189,6 +192,13 @@ Estruc cEstrucControl, _
 	boolInfo2:Booleano
 Var estrucControls[]:cEstrucControl
 
+
+
+Estruc cReferenciaTemporal, _
+	IdClase:EnteroSig, _
+	IdProc:EnteroSig, _
+	BytesRequeridos:Entero
+Var referenciasTemporales[]:cReferenciaTemporal
 
 
 
@@ -297,8 +307,6 @@ Proc Longitud(Referencia texto:Cadena):Entero
 	Ptr@=Ret-4
 	Resultado=Ptr
 FinProc
-
-
 
 
 'VARIABLES QUE SE PUEDEN SACAR EVENTUALMENTE (POR AHORA NO SE SACAN PORQUE TIRA ERROR DE COMPILACIÓN DEBIDO A UN BUG)

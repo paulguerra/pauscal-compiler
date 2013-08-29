@@ -4,6 +4,7 @@ Importar "Aleatorios.prp"
 Importar "Globales.prp"
 Importar "Vdisk.prp"
 Importar "Linea.prp"
+Importar "Archivos.prp"
 
 $EBC- 'Desactivamos EBC para activar la evaluación booleana parcial
 
@@ -18,17 +19,45 @@ Proc IniciarCompilación(archivo:Cadena)
 		AgregarLlamadaFinalizadora()
 		GenerarPrecomp()
 	FinSi
+	precompilando = Falso
 	RealizarCargaEfectiva()
+	ArreglarTiposNoDeclarados()
 	ArreglarTamañoTipos()
 	ArreglarHerencia()
 	VerificarDuplicados()
+	ArreglarPropiedades()
 	DefinirPúblico()
-	precompilando = Falso
+	
 	CompilarArchivo(archivo, Falso)
 FinProc
 
 
 Privado:
+
+
+Proc ArreglarTiposNoDeclarados()
+	Var i,j:EnteroSig
+
+	Contar i = 0 a LongMat(vars)-1
+		Eval vars[i]
+			Si (Longitud(.Nombre) <> 0) And NoHayFlag(.Flags, vinfImportado) Entonces
+				Si esTipo(.Tipo) = 0 Entonces AgregarError(6, Falso, .Tipo)
+			FinSi
+		FinEval
+	Seguir
+	Contar i = 0 a LongMat(clases)-1
+		Eval clases[i]
+			Si (Longitud(.Nombre) <> 0) And NoHayFlag(.Flags, cinfImportada) Entonces
+				Contar j = 0 a LongMat(.vars)-1
+					Eval .vars[j]
+						Si esTipo(.Tipo) = 0 Entonces AgregarError(6, Falso, .Tipo)
+					FinEval
+				Seguir
+			FinSi
+		FinEval
+	Seguir
+FinProc
+
 
 
 Proc ArreglarHerencia()
@@ -42,6 +71,64 @@ Proc ArreglarHerencia()
 					Si indice <> -1 Entonces CopiarInfoDeClase(i, indice, Falso)
 					.NombreHeredero = ""
 				FinSi
+			FinSi
+		FinEval
+	Seguir
+FinProc
+
+
+'Esta función resuelve las referencias adelantadas de propiedades
+'(es decir, cuando una propiedad de una clase hace referencia a un método o variable que se define más adelante)
+Proc ArreglarPropiedades()
+	Var i,j,cantidad,ind:EnteroSig
+	Var numLíneaProp:Entero
+	Var tipo:Cadena
+	Var puntero:Booleano
+
+	Contar i = 0 a LongMat(clases)-1
+		Eval clases[i]
+			Si NoHayFlag(.Flags, cinfImportada) Or NoHayFlag(.Flags, cinfPrivada) Entonces 'No arreglar clases privadas importadas
+				Contar j = 0 a LongMat(.Props)-1
+					Eval .Props[j]
+						numLíneaProp = .Línea
+						Si .Lectura And Longitud(.PtrLectura) <> 0 Entonces
+							cantidad = 0
+							puntero = Falso
+							ind = AdmClaseBuscarMétodo(i, .PtrLectura, tipo, cantidad)
+							Si ind = -1 Entonces
+								ind = AdmClaseÍndiceDeVariable(i, .PtrLectura, tipo, puntero, cantidad)
+								Si ind = -1 Entonces AgregarErrorConLínea(76, Falso, numLíneaProp)
+								ActivarFlag(.Flags, pinfLVarProp)
+							FinSi
+							Si puntero Or (cantidad <> 0) Or (.Tipo <> tipo) Entonces AgregarErrorConLínea(4, Falso, numLíneaProp)
+							.IdPtrLectura = ind
+							.PtrLectura = ""
+						FinSi
+						Si .Escritura And Longitud(.PtrEscritura) <> 0 Entonces
+							cantidad = 0
+							puntero = Falso
+							ind = AdmClaseBuscarMétodo(i, .PtrEscritura, tipo, cantidad)
+							Si ind = -1 Entonces
+								ind = AdmClaseÍndiceDeVariable(i, .PtrEscritura, tipo, puntero, cantidad)
+								Si ind = -1 Entonces AgregarErrorConLínea(76, Falso, numLíneaProp)
+								ActivarFlag(.Flags, pinfEVarProp)
+							SiNo
+								Eval clases[i].Métodos[ind]
+									Si (Longitud(.Tipo) <> 0) Or (LongMat(.Params) = 0) Entonces AgregarErrorConLínea(76, Falso, numLíneaProp)
+									Eval .Params[0]
+										tipo = .Tipo
+										puntero = .Puntero
+										cantidad = .Cantidad
+									FinEval
+									Si HayFlag(.Params[0].Flags, vinfRef) Or .ComienzoOpcional = 1 Entonces AgregarErrorConLínea(76, Falso, numLíneaProp)
+								FinEval
+							FinSi
+							Si puntero Or (cantidad <> 0) Or (.Tipo <> tipo) Entonces AgregarErrorConLínea(4, Falso, numLíneaProp)
+							.IdPtrEscritura = ind
+							.PtrEscritura = ""
+						FinSi
+					FinEval
+				Seguir
 			FinSi
 		FinEval
 	Seguir
@@ -111,8 +198,8 @@ Proc AgregarElementos(Referencia dst,fnt:cClase)
 		
 		Contar i = 0 a LongMat(.Props)-1
 			Eval .Props[i]
-				.PunteroEscritura = > .Flags And pinfEVarProp ? deltaV : deltaF
-				.PunteroLectura = > .Flags And pinfLVarProp ? deltaV : deltaF
+				Si .Escritura And (Longitud(.PtrEscritura) = 0) Entonces .IdPtrEscritura = > .Flags And pinfEVarProp ? deltaV : deltaF
+				Si .Lectura And (Longitud(.PtrLectura) = 0) Entonces .IdPtrLectura = > .Flags And pinfLVarProp ? deltaV : deltaF
 			FinEval
 		Seguir
 		Si LongMat(fnt.Props) > 0 Entonces 'TODO: remover una vez que el bug esté solucionado
@@ -218,7 +305,6 @@ FinProc
 
 
 Proc CompilarArchivo(archivo:Cadena, precompilar:Booleano)
-	Var archivoHandler:pscArchivo
 	Var codigo, codigoLinea:Cadena
 	Var codigoSeparado[]:Cadena
 	Var maxLineas, comentarioPos:Entero
@@ -227,17 +313,7 @@ Proc CompilarArchivo(archivo:Cadena, precompilar:Booleano)
 	rutaActual = ObtenerRuta(archivo)
 	CargarOpcionesPorDefecto()
 	zonaPrivada = Falso
-	Crear archivoHandler
-	archivoHandler.Nombre = archivo
-	archivoHandler.Abrir()
-	Si archivoHandler.Tamaño = 0 Entonces Salir 'El destructor cierra el archivo
-	Si archivoHandler.LeerEnt() = 0 Entonces 'Verificamos que tengamos el '0' que marca archivos con encabezado
-		archivoHandler.Posición = archivoHandler.LeerEnt()
-	SiNo
-		archivoHandler.Posición = 0
-	FinSi
-	codigo = archivoHandler.LeerCad(archivoHandler.Tamaño - archivoHandler.Posición)
-	archivoHandler.Cerrar()
+	codigo = CargarArchivo(archivo)
 	codigoSeparado = Separar(codigo, CrLf)
 	maxLineas = LongMat(codigoSeparado)
 	totalLíneas = totalLíneas + maxLineas

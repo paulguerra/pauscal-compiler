@@ -96,6 +96,49 @@ Proc AdmClaseOffset(idClase:EnteroSig, nombre:Cadena):EnteroSig
 	Resultado = -1
 FinProc
 
+'ClaseAdm 6
+Proc AdmClaseBuscarMétodo(idClase:EnteroSig, nombre:Cadena, Referencia tipo:Cadena, Referencia cantidad:EnteroSig, Opcional baseBúsqueda:EnteroSig = 0):EnteroSig
+	Var i:EnteroSig
+
+	nombre = CadMinus(nombre)
+	Si idClaseActual <> -1 Entonces
+		Eval clases[idClase]
+			Contar i = baseBúsqueda a LongMat(.Métodos)-1
+				Eval .Métodos[i]
+					Si .Nombre = nombre Entonces
+						tipo = .Tipo
+						cantidad = > HayFlag(.Flags, finfRetArrDin) ? -1 : 0
+						Devolver i
+					FinSi
+				FinEval
+			Seguir
+		FinEval
+	FinSi
+	Resultado = -1
+FinProc
+
+'ClaseAdm 7
+Proc AdmClaseÍndiceDeVariable(idClase:EnteroSig, nombre:Cadena, Referencia tipo:Cadena, Referencia puntero:Booleano, Referencia cantidad:EnteroSig):EnteroSig
+	Var i:EnteroSig
+
+	nombre = CadMinus(nombre)
+	Si idClaseActual <> -1 Entonces
+		Eval clases[idClase]
+			Contar i = 0 a LongMat(.Vars)-1
+				Eval .Vars[i]
+					Si .Nombre = nombre Entonces
+						tipo = .Tipo
+						cantidad = .Cantidad
+						puntero = .Puntero
+						Devolver i
+					FinSi
+				FinEval
+			Seguir
+		FinEval
+	FinSi
+	Resultado = -1
+FinProc
+
 'ProcTipoAdm
 Proc AdmProcTipoBuscar(nombre:Cadena):EnteroSig
 	Var i:EnteroSig

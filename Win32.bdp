@@ -21,7 +21,7 @@ Proc EjecutarExterno(comando:Cadena)
 	
 	startInfo.cb = Long(startInfo)
 	startInfo.dwFlags = 1
-	CreateProcess(Nulo, comando, 0, 0, 0, 0, 0, rutaActual, startInfo, procInfo)
+	Si CreateProcess(Nulo, comando, 0, 0, 0, 0, 0, rutaActual, startInfo, procInfo) = 0 Entonces GenerarError errParamInv
 	WaitForSingleObject(procInfo.hProcess, -1)
 FinProc
 
@@ -43,12 +43,20 @@ FinProc
 
 
 Proc ObtenerDirectorioDelEjecutable():Cadena
-	Var ret[],buf:Cadena
+	Var ret[]:Cadena
 	
 	ret = ObtenerLíneaComando()
 	Devolver ret[0]
 FinProc
 
+Proc ObtenerDirectorioActual():Cadena
+	Var pos:Entero
+	Var ret:Cadena
+	
+	ret = RepCarac(0, 2000)
+	pos = GetCurrentDirectory(2000, ret)
+	Devolver TruncarCadena(ret)
+FinProc
 
 Proc ObtenerLíneaComando():Cadena[]
 	Var ptr,i:Entero
@@ -139,4 +147,4 @@ Proc CopyFile(Referencia lpExistingFileName,lpNewFileName:Cadena, bFailIfExists:
 Proc GetCommandLine():Entero, "Kernel32" "GetCommandLineA"
 Proc SendMessage(hWnd,wMsg,wParam,lParam:Entero):Entero, "User32" "SendMessageA"
 Proc SetCurrentDirectory(Referencia lpPathName:Cadena):Entero, "Kernel32" "SetCurrentDirectoryA"
-
+Proc GetCurrentDirectory(nBufferLength:Entero, Referencia lpBuffer:Cadena):Entero, "Kernel32" "GetCurrentDirectoryA"

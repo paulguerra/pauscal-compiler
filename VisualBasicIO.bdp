@@ -191,24 +191,33 @@ FinProc
 Proc EscribirProp(archivo:pscArchivo, Referencia valor:cProp)
 	'Nombre
 	EscribirCadena(archivo, valor.Nombre)
-	
+
 	'Tipo
 	EscribirCadena(archivo, valor.Tipo)
 
 	'HasEsc
 	EscribirBooleano(archivo, valor.Escritura)
-	
+
 	'EscFunc
-	EscribirEntero(archivo, valor.PunteroEscritura)
-	
+	EscribirCadena(archivo, valor.PtrEscritura)
+
+	'EscFuncId
+	EscribirEntero(archivo, valor.IdPtrEscritura)
+
 	'HasLec
 	EscribirBooleano(archivo, valor.Lectura)
-	
+
 	'LecFunc
-	EscribirEntero(archivo, valor.PunteroLectura)
-	
+	EscribirCadena(archivo, valor.PtrLectura)
+
+	'LecFuncId
+	EscribirEntero(archivo, valor.IdPtrLectura)
+
 	'Flags
 	EscribirWord(archivo, valor.Flags)
+
+	'Linea
+	EscribirEntero(archivo, valor.Línea)
 FinProc
 
 Proc LeerProp(archivo:pscArchivo):cProp
@@ -222,16 +231,25 @@ Proc LeerProp(archivo:pscArchivo):cProp
 	Resultado.Escritura = LeerBooleano(archivo)
 	
 	'EscFunc
-	Resultado.PunteroEscritura = LeerEntero(archivo)
+	Resultado.PtrEscritura = LeerCadena(archivo)
+	
+	'EscFuncId
+	Resultado.IdPtrEscritura = LeerEntero(archivo)
 	
 	'HasLec
 	Resultado.Lectura = LeerBooleano(archivo)
 	
 	'LecFunc
-	Resultado.PunteroLectura = LeerEntero(archivo)
+	Resultado.PtrLectura = LeerCadena(archivo)
+	
+	'LecFuncId
+	Resultado.IdPtrLectura = LeerEntero(archivo)
 	
 	'Flags
 	Resultado.Flags = LeerWord(archivo)
+	
+	'Linea
+	Resultado.Línea = LeerEntero(archivo)
 FinProc
 
 'cFunc / cFunc[]

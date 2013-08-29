@@ -1,5 +1,6 @@
 Importar "Cadena.prp"
 Importar "Globales.prp"
+Importar "Errores.prp"
 
 $EBC- 'Desactivamos EBC para activar la evaluación booleana parcial
 

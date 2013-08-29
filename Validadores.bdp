@@ -70,13 +70,11 @@ FinProc
 
 
 Proc ComienzaConNúmero(nombre:Cadena):Booleano
+	Var nro:Byte
+
 	Si Longitud(nombre) > 0 Entonces
-		AdmErr
-			CadEnt(IzquierdaCad(nombre,1))
-		Controlar
-			Devolver Falso
-		FinAdmErr
-		Devolver Verd
+		nro = Ascii(IzquierdaCad(nombre,1))
+		Devolver (nro >= Ascii("0")) And (nro <= Ascii("9"))
 	FinSi
 	Devolver Falso
 FinProc

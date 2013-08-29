@@ -75,6 +75,7 @@ Proc Principal()
 		CargarPalabrasClave()
 		idClaseActual = -1
 		idProcActual = -1
+		referenciasTemporales = [{-1, -1, 0}]
 		
 		'Compilar (paso 1)
 		ActivarDiscosVirtuales()
@@ -108,10 +109,13 @@ Proc Principal()
 		Crear archivoAsm
 		archivoAsm.Nombre = vArchivoAsm
 		archivoAsm.CrearNuevo(Verd)
-		Escribir(";HECHO CON PAUSCAL (C) 2001-2005 PAUL GUERRA. TODOS LOS DERECHOS RESERVADOS")
+		Escribir(";HECHO CON PAUSCAL (C) 2001-2013 PAUL GUERRA. TODOS LOS DERECHOS RESERVADOS")
 		Escribir(".386")
 		Escribir(".model flat,STDCALL")
-		Escribir("include Decs.cod")
+		Escribir("include RuntimeExternals.inc")
+		Escribir(".data")
+		Escribir("assume nothing")
+		Escribir("evalobj dword 0")
 		DefinirExternos()
 		ArreglarDll(códigoCompilado)
 		
@@ -124,7 +128,7 @@ Proc Principal()
 		cronoMedio = Ticks() - crono
 		
 		'Ensamblamos
-		EjecutarExterno("Asm /ml/m5/r " + vArchivoAsm + ",Compil")
+		EjecutarExterno("Ml /c /Zp1 /Cp /Cx /FoCompil.obj " + vArchivoAsm)
 		
 		Si esBibPrecomp Entonces
 			Si Neg ExisteArchivo(cArchivoObj) Entonces
@@ -140,9 +144,9 @@ Proc Principal()
 			FinSi
 		SiNo
 			Si esDll Entonces
-				EjecutarExterno("Linker /x/Tpd/aa/c Runtime Math Excp " + GenerarObjTemporales() + " Compil,App,,Import32,Compil.mod" + (> esConRecursos ? ",Compil.res" : ""))
+				EjecutarExterno("Link Runtime Math Excp Compil " + GenerarObjTemporales() + " /SUBSYSTEM:WINDOWS /DLL /OUT:App.dll /DEF:Compil.mod")
 			SiNo
-				EjecutarExterno("Linker /x/Tpe/aa/c Runtime Math Excp " + GenerarObjTemporales() + " Compil,App,,Import32,Compil.mod" + (> esConRecursos ? ",Compil.res" : ""))
+				EjecutarExterno("Link Runtime Math Excp Compil " + GenerarObjTemporales() + " /SUBSYSTEM:WINDOWS /OUT:App.exe")
 			FinSi
 			RemoverObjTemporales()
 			Si esDll Entonces
@@ -154,7 +158,10 @@ Proc Principal()
 		FinSi
 		Limpiar()
 	Controlar
-		AgregarError(75, Falso)
+		AdmErr 'TODO: este AdmErr es necesario por un bug en el compilador
+			AgregarError(75, Falso)
+		Controlar
+		FinAdmErr
 	FinAdmErr
 FinProc
 
@@ -221,11 +228,8 @@ Proc PostProcesar(Referencia códigoCompilado:Cadena)
 			FinSi
 		FinEval
 	Seguir
-	Contar i = 0 a LongMat(datos)-1
-		Eval datos[i]
-			Si Longitud(.Tipo) <> 0 Entonces Escribir(.Id + " " + .Tipo + " " + .Dato)
-		FinEval
-	Seguir
+	GenerarDatos()
+	GenerarTamañosDeVariablesTemporales()
 	Si incluirDebug Entonces
 		Escribir("pscDebugSetStr:")
 		Escribir("push dword ptr [ebx]")
@@ -249,28 +253,65 @@ Proc PostProcesar(Referencia códigoCompilado:Cadena)
 		AgregarCodigoMain()
 		AgregarLlamadasIniciales()
 	FinSi
-	Si esDll Entonces
-		Escribir("LibMain:")
-		Escribir("xor eax,eax")
-		Escribir("inc eax")
-		Escribir("ret")
-	FinSi
 	Si Neg esBibPrecomp Entonces
 		Escribir("pscEnd:")
-		AgregarLlamadasFinalizadoras()
-		LiberarVariables(vars, 0, Verd)
-		Escribir("call pscObjListDispose")
-		Escribir("push 0")
-		Escribir("call ExitProcess")
+		Escribir("ret")
+		Escribir("_main_proc_ endp")
+		Si esDll Entonces AgregarPuntoEntradaDll(); SiNo; AgregarPuntoEntradaExe()
 	FinSi
 	GenerarArchivoMod()
 	Si Neg esBibPrecomp Entonces
-		Escribir("public pscEnd")
 		Escribir("end start")
 	SiNo
 		Escribir("end")
 	FinSi
 FinProc
+
+
+
+Proc AgregarPuntoEntradaExe()
+	'Punto de entrada (Entry Point)
+	Escribir("start:")
+	Escribir("mov ebx,offset _main_proc_")
+	Si incluirDebug Entonces Escribir("mov ebp, esp")
+	Escribir("call pscBeginExec")
+
+	'Finalización
+	AgregarLlamadasFinalizadoras()
+	LiberarVariables(vars, 0, Verd)
+	Escribir("call pscObjListDispose")
+	Escribir("push 0")
+	Escribir("call ExitProcess")
+FinProc
+
+
+
+Proc AgregarPuntoEntradaDll()
+	'Punto de entrada (Entry Point)
+	Escribir("start:")
+	Escribir("mov eax,[esp+8]")
+	Escribir("test eax,eax")
+	Escribir("jz _$dll_detach") 'Si es 0, estamos desatachando la DLL: liberamos y salimos
+	Escribir("dec eax")
+	Escribir("jnz _$dll_exit") 'Si no es 1, entonces no es ni atachar ni desatachar: salimos
+	Escribir("mov ebx,offset _main_proc_")
+	Si incluirDebug Entonces Escribir("mov ebp, esp")
+	Escribir("call pscBeginExec")
+	Escribir("jmp _$dll_exit")
+
+	'Finalización
+	Escribir("_$dll_detach:")
+	AgregarLlamadasFinalizadoras()
+	LiberarVariables(vars, 0, Verd)
+	Escribir("call pscObjListDispose")
+
+	'Siempre termina bien el LibMain
+	Escribir("_$dll_exit:")
+	Escribir("xor eax,eax")
+	Escribir("inc eax")
+	Escribir("retn 12")
+FinProc
+
 
 
 Proc GenerarArchivoInfo(crono:Entero, cronoMedio:Entero)
@@ -724,6 +765,81 @@ Proc AgregarInfoDebug()
 	EscribirClases(arch, clases)
 	EscribirEntero(arch, LongMat(infoLineas)+1) ' +1 = ajuste VB
 	EscribirInfoLineas(arch, infoLineas)
+FinProc
+
+
+Const MaxCantidadDatos = 15
+Proc GenerarDatos()
+	Var i,j:EnteroSig
+	Var bytes:Cadena
+	Var conId:Booleano
+
+	Contar i = 0 a LongMat(datos)-1
+		Eval datos[i]
+			Si .Tipo <> pCadena Entonces
+				Escribir(.Id + " " + .Tipo + " " + .Dato)
+			SiNo
+				bytes = ""
+				conId = Falso
+				Contar j = 1 a Longitud(.Dato)
+					Si Longitud(bytes) > 1 Entonces bytes = bytes + ","
+					bytes = bytes + EntCad(Ascii(ParteCad(.Dato, j, 1)))
+					Si (j Mod MaxCantidadDatos) = MaxCantidadDatos - 1 Entonces
+						Si Neg conId Entonces
+							Escribir(.Id + " byte " + bytes)
+							conId = Verd
+						SiNo
+							Escribir("byte " + bytes)
+						FinSi
+						bytes = ""
+					FinSi
+				Seguir
+				Si Longitud(bytes) Entonces
+					Si Neg conId Entonces
+						Escribir(.Id + " byte " + bytes)
+						conId = Verd
+					SiNo
+						Escribir("byte " + bytes)
+					FinSi
+				FinSi
+			FinSi
+		FinEval
+	Seguir
+FinProc
+
+
+
+Proc GenerarTamañosDeVariablesTemporales()
+	Var i,j,k:EnteroSig
+
+	Contar i = 0 a LongMat(clases)-1
+		Si NoHayFlag(clases[i].Flags, cinfImportada) Entonces
+			Contar j = 0 a LongMat(clases[i].Métodos)-1
+				Contar k = 0 a LongMat(referenciasTemporales)-1
+					Eval referenciasTemporales[k]
+						Si .IdClase = i And .IdProc = j Entonces
+							'+1 para mantener compatibilidad
+							EscribirU("__$localspace_c{0}_p{1}_ equ {2}", i+1, j+1, .BytesRequeridos)
+							Salir Contar
+						FinSi
+					FinEval
+				Seguir
+			Seguir
+		FinSi
+	Seguir
+	Contar i = -1 a LongMat(procs)-1 'Desde -1 para incluir el código global
+		Si (i = -1) Or NoHayFlag(procs[i].Flags, finfImportado) Entonces
+			Contar j = 0 a LongMat(referenciasTemporales)-1
+				Eval referenciasTemporales[k]
+					Si (.IdClase = -1) And (.IdProc = i) Entonces
+						'+1 para mantener compatibilidad
+						EscribirU("__$localspace_c0_p{0}_ equ {1}", i+1, .BytesRequeridos)
+						Salir Contar
+					FinSi
+				FinEval
+			Seguir
+		FinSi
+	Seguir
 FinProc
 
 CambiarDirectorioActual("C:\Archivos de programa\Pauscal\Editor\Compilador")

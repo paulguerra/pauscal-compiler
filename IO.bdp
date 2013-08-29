@@ -11,7 +11,11 @@ Proc ObtenerRuta(archivo:Cadena):Cadena
 	Var pos:Entero
 	
 	pos = BuscarEnCadInv(archivo, "\")
-	Devolver > pos>0 ? IzquierdaCad(archivo, pos-1) : archivo
+	Si pos = 0 Entonces
+		Devolver ObtenerDirectorioActual()
+	SiNo
+		Devolver IzquierdaCad(archivo, pos-1)
+	FinSi
 FinProc
 
 
@@ -113,7 +117,7 @@ Privado:
 
 
 Proc ReemplazarEnCadena(Referencia texto:Cadena, Referencia valores[]:Cadena)
-	Var i,pos:EnteroSig
+	Var i,pos,pos2:EnteroSig
 	Var match:Cadena
 	
 	Contar i = 0 a LongMat(valores)-1
@@ -121,7 +125,9 @@ Proc ReemplazarEnCadena(Referencia texto:Cadena, Referencia valores[]:Cadena)
 		Repetir
 			pos = BuscarEnCad(texto, match)
 			Si pos = 0 Entonces Salir Repetir
-			texto = IzquierdaCad(texto, pos-1) + valores[i] + ParteCad(texto, pos+Longitud(match))
+			pos2 = pos+Longitud(match)
+			texto = IzquierdaCad(texto, pos-1) + valores[i] + _
+				(> pos2 <= Longitud(texto) ? ParteCad(texto, pos2) : "")
 		PorSiempre
 	Seguir
 FinProc

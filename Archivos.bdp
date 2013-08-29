@@ -1,0 +1,57 @@
+Importar "Win.prp"
+Importar "Cadena.prp"
+Importar "Conversiones.prp"
+Importar "Globales.prp"
+
+$EBC- 'Desactivamos EBC para activar la evaluación booleana parcial
+
+
+Proc CargarArchivo(archivo:Cadena):Cadena
+	Var archivoHandler:pscArchivo
+	Var posición,posición2,nro:Entero
+
+	Crear archivoHandler
+	archivoHandler.Nombre = archivo
+	archivoHandler.Abrir()
+	Si archivoHandler.Tamaño = 0 Entonces Salir 'El destructor cierra el archivo
+	Resultado = archivoHandler.LeerCad(archivoHandler.Tamaño)
+	archivoHandler.Cerrar()
+
+	'Heurística para determinar el contenido (no puede ser 100% seguro por un bug viejo en el editor)
+	Si IzquierdaCad(Resultado, 1) = #0 Entonces
+		posición = BuscarEnCadInv(Resultado, #0)
+		Resultado = ParteCad(Resultado, posición+1)
+	FinSi
+
+	'Heurística para determinar si es XML
+	Si ParteCad(Resultado, 1, 8) <> "<Datos><" Entonces Salir
+
+	'Heurísitica para determinar el código dentro del XML
+	posición = BuscarEnCad(Resultado, "<Contenido>")
+	Si posición = 0 Entonces Salir
+	posición2 = BuscarEnCadInv(Resultado, "</Contenido>")
+	Si posición2 = 0 Entonces Salir
+	Resultado = ParteCad(Resultado, posición + 12, posición2 - posición - 12)
+
+	'Reemplazar caracteres de XML
+	Resultado = Reemplazar(Resultado, "&gt;", ">")
+	Resultado = Reemplazar(Resultado, "&lt;", "<")
+	Resultado = Reemplazar(Resultado, "&amp;", "<")
+
+	'Reconvertir caracteres extraños
+	Repetir
+		posición = BuscarEnCad(Resultado, "$")
+		Si (posición = 0) Or (posición > Longitud(Resultado)) Entonces Salir Repetir
+		nro = HexEnt(ParteCad(Resultado, posición+1, 2))
+		Resultado = IzquierdaCad(Resultado, posición - 1) + Carac(nro) + ParteCad(Resultado, posición + 3)
+	PorSiempre
+
+	'Unificar final de línea
+	Resultado = Reemplazar(Resultado, #13#10, #10)
+	Resultado = Reemplazar(Resultado, #13, #10)
+FinProc
+
+
+Privado:
+
+
